@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>QuickMD</title>
+<style>
+        :root {
+            --bg-color: #f8f9fa;
+            --card-bg: white;
+            --text-color: #1a1a1a;
+            --text-muted: #6c757d;
+            --border-color: #e9ecef;
+            --accent-color: #1a1a1a;
+            --secondary-bg: #f8f9fa;
+            --success-bg: #d1e7dd;
+            --success-color: #0f5132;
+            --warning-bg: #fff3cd;
+            --warning-color: #664d03;
+            --error-bg: #f8d7da;
+            --error-color: #842029;
+        }
+
+        .dark-theme {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #ffffff;
+            --text-muted: #9ca3af;
+            --border-color: #404040;
+            --accent-color: #ffffff;
+            --secondary-bg: #404040;
+            --success-bg: #065f46;
+            --success-color: #d1fae5;
+            --warning-bg: #78350f;
+            --warning-color: #fef3c7;
+            --error-bg: #7f1d1d;
+            --error-color: #fecaca;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.4;
+            transition: background 0.3s ease, color 0.3s ease;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            height: 100vh;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .theme-toggle {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle:hover {
+            border-color: var(--accent-color);
+        }
+
+        /* Setup Screen */
+        .setup-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .setup-theme-toggle {
+            position: fixed;
+            top: 15px;
+            right: 15px;
+            z-index: 1000;
+        }
+
+        .mode-selection {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .mode-btn {
+            padding: 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+        }
+
+        .mode-btn:hover {
+            border-color: var(--accent-color);
+        }
+
+        .mode-btn.selected {
+            border-color: var(--accent-color);
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        .mode-btn h3 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .mode-btn p {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        .input-group {
+            width: 100%;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            font-size: 1rem;
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .btn {
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 15px 24px;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s ease;
+            width: 100%;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn.secondary {
+            background: var(--card-bg);
+            color: var(--accent-color);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn.secondary:hover {
+            border-color: var(--accent-color);
+            opacity: 1;
+        }
+
+        .btn.danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn.compact {
+            width: auto;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+
+        .status {
+            text-align: center;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            width: 100%;
+        }
+
+        .status.connected {
+            background: var(--success-bg);
+            color: var(--success-color);
+        }
+
+        .status.waiting {
+            background: var(--warning-bg);
+            color: var(--warning-color);
+        }
+
+        .status.error {
+            background: var(--error-bg);
+            color: var(--error-color);
+        }
+
+        .room-item {
+            padding: 15px;
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--card-bg);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .room-item:hover {
+            border-color: var(--accent-color);
+        }
+
+        .room-item h4 {
+            font-size: 1rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .room-item p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* App Screen */
+        .app-screen {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Host Layout */
+        .host-layout {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 15px;
+        }
+
+        .host-info {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 20px;
+            min-height: 80px;
+        }
+
+        .fullscreen-btn {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fullscreen-btn:hover {
+            border-color: var(--accent-color);
+        }
+
+        .host-info-left {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            align-items: center;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .display-small {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--accent-color);
+        }
+
+        .host-controls {
+            display: grid;
+            grid-template-rows: 2fr auto 1fr;
+            gap: 15px;
+            height: calc(100vh - 130px);
+        }
+
+        .part-controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 2px;
+        }
+
+        .dynamics-controls {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2px;
+            height: 120px;
+        }
+
+        .nashville-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            align-items: stretch;
+        }
+
+        .control-btn, .nashville-btn {
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-family: 'Poppins', sans-serif;
+            border-radius: 8px;
+        }
+
+        .control-btn:hover, .nashville-btn:hover {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        .nashville-btn {
+            font-size: 2.5rem;
+        }
+
+        .progression-toggle {
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 1.8rem;
+            font-weight: 700;
+            writing-mode: horizontal-tb;
+        }
+
+        .progression-toggle.active {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        .progression-toggle:hover {
+            background: var(--accent-color);
+            color: var(--bg-color);
+        }
+
+        /* Color toggle button */
+        .color-toggle {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .color-toggle:hover {
+            border-color: var(--accent-color);
+        }
+
+        /* Song part button colors */
+        .part-controls .control-btn:nth-child(1) { background: #A7D8DE; color: #000; }
+        .part-controls .control-btn:nth-child(2) { background: #FCD5CE; color: #000; }
+        .part-controls .control-btn:nth-child(3) { background: #D5AAFF; color: #000; }
+        .part-controls .control-btn:nth-child(4) { background: #FFDAC1; color: #000; }
+        .part-controls .control-btn:nth-child(5) { background: #B5EAD7; color: #000; }
+        .part-controls .control-btn:nth-child(6) { background: #E2F0CB; color: #000; }
+        .part-controls .control-btn:nth-child(7) { background: #FFABAB; color: #000; }
+        .part-controls .control-btn:nth-child(8) { background: #CBAACB; color: #000; }
+
+        /* Dynamics button colors */
+        .dynamics-controls .control-btn:nth-child(1) { background: #FFE5CC; color: #000; }
+        .dynamics-controls .control-btn:nth-child(2) { background: #D4F1F4; color: #000; }
+        .dynamics-controls .control-btn:nth-child(3) { background: #FFD3E1; color: #000; }
+        .dynamics-controls .control-btn:nth-child(4) { background: #E5D4FF; color: #000; }
+
+        /* Dark mode colors for colored buttons */
+        .dark-theme .part-controls .control-btn:nth-child(1) { background: #5A8B91; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(2) { background: #B8877D; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(3) { background: #9966CC; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(4) { background: #CC9977; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(5) { background: #7A9D8C; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(6) { background: #A8B85E; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(7) { background: #CC7777; color: #fff; }
+        .dark-theme .part-controls .control-btn:nth-child(8) { background: #997799; color: #fff; }
+
+        .dark-theme .dynamics-controls .control-btn:nth-child(1) { background: #CC9966; color: #fff; }
+        .dark-theme .dynamics-controls .control-btn:nth-child(2) { background: #6A8B8F; color: #fff; }
+        .dark-theme .dynamics-controls .control-btn:nth-child(3) { background: #CC7799; color: #fff; }
+        .dark-theme .dynamics-controls .control-btn:nth-child(4) { background: #8866CC; color: #fff; }
+
+        /* No colors mode - removes all colored backgrounds */
+        .no-colors .part-controls .control-btn,
+        .no-colors .dynamics-controls .control-btn {
+            background: var(--card-bg) !important;
+            color: var(--text-color) !important;
+        }
+
+        /* Client Layout */
+        .client-layout {
+            display: grid;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 15px;
+        }
+
+        .client-top-controls {
+            width: 200px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-left: auto;
+            padding: 0 5px;
+        }
+
+        .client-top-controls .btn.compact {
+            height: 40px;
+            font-size: 1rem;
+            padding: 8px 16px;
+        }
+
+        .client-displays {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 15px;
+            padding: 0 5px 15px 5px;
+        }
+
+        .chord-section {
+            grid-column: 1 / -1;
+        }
+
+        .display-large {
+            font-size: 4.5rem;
+            font-weight: 300;
+            color: var(--text-color);
+            letter-spacing: -2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .display-label {
+            font-size: 1.6rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+            font-weight: 500;
+            text-align: center;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .display-section {
+            padding: 40px 20px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            border: 3px solid var(--border-color);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .display-section.active {
+            border-color: var(--accent-color);
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .display-section.flash {
+            animation: flash 0.3s ease-out;
+        }
+
+        .dynamics-display {
+            padding: 40px 20px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            border: 3px solid var(--border-color);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .dynamics-display .display-label {
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+        }
+
+        .dynamics-display .display-large {
+            font-size: 4.5rem;
+        }
+
+        .dynamics-display.active {
+            border-color: var(--accent-color);
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+
+        .dynamics-display.flash {
+            animation: flash 0.3s ease-out;
+        }
+
+        @keyframes flash {
+            0% {
+                background: var(--accent-color);
+                color: var(--bg-color);
+                transform: scale(1.05);
+            }
+            50% {
+                background: var(--accent-color);
+                color: var(--bg-color);
+                transform: scale(1.05);
+            }
+            100% {
+                background: var(--card-bg);
+                color: var(--text-color);
+                transform: scale(1);
+            }
+        }
+
+        .placeholder {
+            opacity: 0.3;
+            font-style: italic;
+        }
+
+        /* Participants */
+        .participants {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 10px 15px;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .participant-count {
+            color: var(--text-muted);
+            margin-right: 10px;
+        }
+
+        .participant {
+            display: inline-block;
+            background: var(--secondary-bg);
+            padding: 4px 8px;
+            border-radius: 12px;
+            margin-right: 8px;
+            font-size: 0.8rem;
+        }
+
+        .participants-theme-toggle {
+            margin-left: 10px;
+            width: 30px;
+            height: 30px;
+            font-size: 14px;
+        }
+
+        /* Controls layout adjustments */
+        .top-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .room-section {
+            width: 100%;
+        }
+
+        .available-rooms {
+            max-height: 200px;
+            overflow-y: auto;
+            margin: 15px 0;
+        }
+
+        .manual-join {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .section-title {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+
+        /* Mobile Portrait - Phone */
+        @media (orientation: portrait) and (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            /* Host Layout Mobile Portrait */
+            .host-info {
+                padding: 12px;
+                grid-template-columns: 1fr auto;
+                grid-template-rows: auto;
+                gap: 10px;
+                min-height: 80px;
+            }
+
+            .host-info-left {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr 1fr;
+                gap: 8px;
+                font-size: 0.85rem;
+            }
+
+            .display-small {
+                font-size: 1rem;
+            }
+
+            .top-controls {
+                justify-content: flex-end;
+                gap: 6px;
+            }
+
+            .top-controls .btn,
+            .top-controls .fullscreen-btn,
+            .top-controls .theme-toggle,
+            .top-controls .color-toggle {
+                font-size: 11px;
+                height: 28px;
+                width: auto;
+                padding: 4px 6px;
+                border-radius: 6px;
+                min-width: 28px;
+            }
+
+            .top-controls .btn.danger {
+                padding: 4px 8px;
+            }
+
+            .host-controls {
+                grid-template-rows: 2fr auto 1fr;
+                gap: 10px;
+            }
+
+            .part-controls {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(4, 1fr);
+            }
+
+            .dynamics-controls {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(2, 1fr);
+                height: 140px;
+            }
+
+            .nashville-container {
+                grid-template-columns: repeat(4, 1fr);
+                grid-template-rows: repeat(2, 1fr);
+                gap: 4px;
+            }
+
+            .control-btn {
+                font-size: 1.4rem;
+            }
+
+            .nashville-btn {
+                font-size: 2rem;
+            }
+
+            .progression-toggle {
+                font-size: 1.2rem;
+            }
+
+            /* Client Layout Mobile Portrait */
+            .client-layout {
+                padding: 10px;
+                gap: 10px;
+            }
+
+            .client-top-controls {
+                width: auto;
+                margin-left: auto;
+            }
+
+            .client-top-controls .btn.compact {
+                font-size: 0.8rem;
+                height: 32px;
+                padding: 6px 10px;
+            }
+
+            .client-displays {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+                padding: 0;
+                height: calc(100vh - 64px);
+            }
+
+            .display-section,
+            .dynamics-display {
+                flex: 1;
+                min-height: 0;
+                padding: 15px 12px;
+            }
+
+            .display-large {
+                font-size: 2.8rem;
+            }
+
+            .display-label {
+                font-size: 1rem;
+                margin-bottom: 8px;
+            }
+        }
+
+        /* Mobile Landscape - Phone */
+        @media (orientation: landscape) and (max-height: 700px) {
+            .container {
+                padding: 8px;
+            }
+
+            /* Host Layout Mobile Landscape */
+            .host-info {
+                padding: 8px 12px;
+                min-height: 60px;
+                grid-template-columns: 1fr auto;
+                grid-template-rows: auto;
+            }
+
+            .host-info-left {
+                grid-template-columns: repeat(4, 1fr);
+                grid-template-rows: auto;
+                gap: 15px;
+                font-size: 0.85rem;
+            }
+
+            .display-small {
+                font-size: 1rem;
+            }
+
+            .host-layout {
+                grid-template-rows: 60px 1fr;
+                gap: 8px;
+            }
+
+            .host-controls {
+                grid-template-rows: 2fr auto 1fr;
+                gap: 8px;
+                height: calc(100vh - 76px);
+            }
+
+            .dynamics-controls {
+                height: 80px;
+            }
+
+            .nashville-container {
+                grid-template-columns: repeat(4, 1fr);
+                grid-template-rows: repeat(2, 1fr);
+            }
+
+            .control-btn {
+                font-size: 1.2rem;
+            }
+
+            .nashville-btn {
+                font-size: 1.6rem;
+            }
+
+            .progression-toggle {
+                font-size: 1rem;
+            }
+
+            /* Client Layout Mobile Landscape */
+            .client-layout {
+                padding: 8px;
+                gap: 8px;
+                grid-template-rows: auto 1fr;
+            }
+
+            .client-top-controls {
+                width: auto;
+                margin-left: auto;
+            }
+
+            .client-top-controls .btn.compact {
+                font-size: 0.75rem;
+                height: 28px;
+                padding: 4px 8px;
+            }
+
+            .client-displays {
+                display: flex;
+                flex-direction: row;
+                gap: 8px;
+                padding: 0;
+                height: calc(100vh - 44px);
+            }
+
+            .chord-section {
+                order: 2;
+                flex: 1;
+            }
+
+            .display-section,
+            .dynamics-display {
+                flex: 1;
+                padding: 12px 8px;
+                min-height: 0;
+            }
+
+            .display-large {
+                font-size: 2.2rem;
+            }
+
+            .display-label {
+                font-size: 0.9rem;
+                margin-bottom: 6px;
+            }
+        }
+
+        /* Tablet Portrait */
+        @media (orientation: portrait) and (min-width: 769px) and (max-width: 1024px) {
+            .host-info-left {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 20px;
+                font-size: 1.1rem;
+            }
+
+            .display-small {
+                font-size: 1.3rem;
+            }
+
+            .host-controls {
+                grid-template-rows: 2fr auto 1fr;
+            }
+
+            .control-btn {
+                font-size: 2.2rem;
+            }
+
+            .nashville-btn {
+                font-size: 2.8rem;
+            }
+
+            .progression-toggle {
+                font-size: 2rem;
+            }
+
+            /* Client tablet layout - fill screen properly */
+            .client-displays {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr auto;
+                gap: 20px;
+            }
+
+            .chord-section {
+                grid-column: 1 / -1;
+                grid-row: 2;
+            }
+
+            .display-large {
+                font-size: 5.5rem;
+            }
+
+            .display-label {
+                font-size: 1.8rem;
+                margin-bottom: 25px;
+            }
+        }
+
+        /* Desktop and Large Screens */
+        @media (min-width: 1025px) {
+            .nashville-container {
+                grid-template-columns: repeat(8, 1fr);
+            }
+
+            .host-info-left {
+                grid-template-columns: repeat(4, 1fr);
+            }
+
+            .host-controls {
+                grid-template-rows: 2fr auto 1fr;
+            }
+
+            /* Client desktop layout - fill screen properly */
+            .client-displays {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: 1fr auto;
+                gap: 25px;
+            }
+
+            .chord-section {
+                grid-column: 1 / -1;
+                grid-row: 2;
+            }
+
+            .display-large {
+                font-size: 6.5rem;
+            }
+
+            .display-label {
+                font-size: 2rem;
+                margin-bottom: 30px;
+            }
+        }
+
+        /* Small phones */
+        @media (max-width: 480px) {
+            .mode-selection {
+                grid-template-columns: 1fr;
+            }
+        }
+    
+.display-large {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+  text-align: center;
+}
+
+@media (orientation: landscape) and (max-height: 700px) {
+  .client-layout {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .client-displays {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .display-section,
+  .dynamics-display {
+    flex: 1;
+    padding: 8px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .display-large {
+    font-size: 2rem;
+    text-align: center;
+    word-wrap: break-word;
+  }
+
+  .display-label {
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+    text-align: center;
+  }
+
+  .client-top-controls .btn.danger.compact {
+    flex: 1;
+    height: 100%;
+  }
+
+  .client-top-controls {
+    align-items: stretch;
+  }
+}
+</style>
+</head>
+<body>
+<div class="container">
+<!-- Setup Screen -->
+<div class="setup-screen" id="setup">
+<button class="theme-toggle setup-theme-toggle" id="themeToggle" onclick="toggleTheme()">🌙</button>
+<div class="mode-selection">
+<div class="mode-btn" onclick="selectMode('host')">
+<h3>Host</h3>
+<p>Create room</p>
+</div>
+<div class="mode-btn" onclick="selectMode('client')">
+<h3>Join</h3>
+<p>Connect to room</p>
+</div>
+</div>
+<div class="room-section" id="roomSection" style="display: none;">
+<div class="input-group" id="hostRoomInput" style="margin-bottom: 15px;">
+<input id="roomInput" placeholder="Room name" type="text"/>
+</div>
+<div class="available-rooms" id="availableRooms" style="display: none;">
+<div class="section-title">Available Rooms</div>
+<div id="roomsList"></div>
+<div class="status" id="noRoomsMessage" style="display: none;">No rooms available</div>
+<div class="manual-join">
+<div class="section-title">Manual Join</div>
+<div class="input-group">
+<input id="manualRoomId" placeholder="Enter Room ID" type="text"/>
+</div>
+<button class="btn secondary" onclick="manualJoin()">Join Room</button>
+</div>
+</div>
+<button class="btn" id="roomBtn" onclick="handleRoom()">Create Room</button>
+</div>
+<div class="status" id="status" style="display: none;"></div>
+</div>
+<!-- App Screen -->
+<div class="app-screen" id="app" style="display: none;">
+<!-- Host Layout -->
+<div class="host-layout" id="hostLayout" style="display: none;">
+<div class="host-info">
+<div class="host-info-left">
+<div><strong id="currentRoom"></strong></div>
+<div>Part: <span class="display-small" id="currentPartHost">—</span></div>
+<div>Number: <span class="display-small" id="nashvilleNumberHost">—</span></div>
+<div>Dynamic: <span class="display-small" id="dynamicsHost">—</span></div>
+</div>
+<div class="top-controls">
+<button class="fullscreen-btn" id="fullscreenBtn" onclick="toggleFullscreen()">📱</button>
+<button class="theme-toggle" id="appThemeToggle" onclick="toggleTheme()">🌙</button>
+<button class="color-toggle" id="colorToggle" onclick="toggleColors()">🎨</button>
+<button class="btn danger" onclick="endRoom()">End</button>
+</div>
+</div>
+<div class="host-controls">
+<div class="part-controls">
+<button class="control-btn" onclick="sendPart('Intro')">Intro</button>
+<button class="control-btn" onclick="sendPart('V1')">Verse 1</button>
+<button class="control-btn" onclick="sendPart('V2')">Verse 2</button>
+<button class="control-btn" onclick="sendPart('PC')">Pre-Chorus</button>
+<button class="control-btn" onclick="sendPart('Chorus')">Chorus</button>
+<button class="control-btn" onclick="sendPart('Bridge')">Bridge</button>
+<button class="control-btn" onclick="sendPart('Tag')">Tag</button>
+<button class="control-btn" onclick="sendPart('Outro')">Outro</button>
+</div>
+<div class="dynamics-controls">
+<button class="control-btn" onclick="sendDynamics('Build')">Build</button>
+<button class="control-btn" onclick="sendDynamics('Quiet')">Quiet</button>
+<button class="control-btn" onclick="sendDynamics('Big')">Big</button>
+<button class="control-btn" onclick="sendDynamics('Build to Cut Quiet')">Build Cut</button>
+</div>
+<div class="nashville-container">
+<button class="control-btn progression-toggle" id="progressionToggle" onclick="toggleProgression()">PROG</button>
+<button class="nashville-btn" onclick="sendNashville('1')">1</button>
+<button class="nashville-btn" onclick="sendNashville('2')">2</button>
+<button class="nashville-btn" onclick="sendNashville('3')">3</button>
+<button class="nashville-btn" onclick="sendNashville('4')">4</button>
+<button class="nashville-btn" onclick="sendNashville('5')">5</button>
+<button class="nashville-btn" onclick="sendNashville('6')">6</button>
+<button class="nashville-btn" onclick="sendNashville('7')">7</button>
+</div>
+</div>
+</div>
+<!-- Client Layout -->
+<div class="client-layout" id="clientLayout" style="display: none;">
+<div class="client-top-controls">
+<button class="fullscreen-btn" onclick="toggleFullscreen()">📱</button>
+<button class="theme-toggle" onclick="toggleTheme()">🌙</button>
+<button class="btn danger compact" onclick="returnToStart()">Leave</button>
+</div>
+<div class="client-displays">
+<div class="display-section" id="partSection">
+<div class="display-label">Part</div>
+<div class="display-large" id="currentPart">
+<span class="placeholder">—</span>
+</div>
+</div>
+<div class="dynamics-display" id="dynamicsSection">
+<div class="display-label">Dynamic</div>
+<div class="display-large" id="currentDynamics">
+<span class="placeholder">—</span>
+</div>
+</div>
+<div class="display-section chord-section" id="nashvilleSection">
+<div class="display-label">Chord</div>
+<div class="display-large" id="nashvilleNumber">
+<span class="placeholder">—</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="participants" id="participants" style="display: none;">
+<div>
+<span class="participant-count">Connected (<span id="participantCount">0</span>):</span>
+<span id="participantList"></span>
+</div>
+<button class="theme-toggle participants-theme-toggle" onclick="toggleTheme()">🌙</button>
+</div>
+<div id="peerId" style="display: none;">
+<strong>Room ID:</strong> <span id="peerIdValue"></span>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+<script>
+        let peer = null;
+        let connections = new Map();
+        let currentMode = null;
+        let currentRoom = null;
+        let isHost = false;
+        let hostConnection = null;
+        let discoveryPeer = null;
+        let broadcastChannel = null;
+        let availableRooms = new Map();
+        let heartbeatInterval = null;
+        let activeTimers = new Map(); // Track active display timers
+        let progressionMode = false; // Track progression toggle state
+        let currentProgression = []; // Track current chord progression
+        let colorsEnabled = true; // Track color toggle state
+
+        // Well-known discovery peer IDs for cross-device discovery
+        const DISCOVERY_PREFIXES = ['qmd-discovery-', 'qmd-beacon-', 'qmd-finder-'];
+        const DISCOVERY_SUFFIXES = ['alpha', 'beta', 'gamma', 'delta', 'echo', 'foxtrot'];
+
+        function selectMode(mode) {
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+            event.target.closest('.mode-btn').classList.add('selected');
+            currentMode = mode;
+            
+            const roomSection = document.getElementById('roomSection');
+            const roomBtn = document.getElementById('roomBtn');
+            const hostRoomInput = document.getElementById('hostRoomInput');
+            const availableRoomsDiv = document.getElementById('availableRooms');
+            
+            roomSection.style.display = 'block';
+            
+            if (mode === 'host') {
+                roomBtn.textContent = 'Create Room';
+                hostRoomInput.style.display = 'block';
+                availableRoomsDiv.style.display = 'none';
+                isHost = true;
+            } else {
+                roomBtn.textContent = 'Refresh Rooms';
+                hostRoomInput.style.display = 'none';
+                availableRoomsDiv.style.display = 'block';
+                isHost = false;
+                discoverRooms();
+            }
+        }
+
+        function generateRoomId() {
+            return 'qmd-room-' + Math.random().toString(36).substr(2, 8);
+        }
+
+        function generateDiscoveryId() {
+            const prefix = DISCOVERY_PREFIXES[Math.floor(Math.random() * DISCOVERY_PREFIXES.length)];
+            const suffix = DISCOVERY_SUFFIXES[Math.floor(Math.random() * DISCOVERY_SUFFIXES.length)];
+            return prefix + suffix;
+        }
+
+        function handleRoom() {
+            if (isHost) {
+                const roomInput = document.getElementById('roomInput').value.trim();
+                if (!roomInput) {
+                    showStatus('Please enter a room name', 'error');
+                    return;
+                }
+                createRoom(roomInput);
+            } else {
+                discoverRooms();
+            }
+        }
+
+        function createRoom(roomName) {
+            showStatus('Creating room...', 'waiting');
+            
+            const roomId = generateRoomId();
+            peer = new Peer(roomId);
+            currentRoom = roomName;
+
+            peer.on('open', function(id) {
+                showStatus('Room created! Share Room ID with musicians', 'connected');
+                showApp();
+                document.getElementById('peerIdValue').textContent = id;
+                updateParticipants();
+                
+                // Start discovery beacon
+                startDiscoveryBeacon();
+                
+                // Start heartbeat for room maintenance
+                startHeartbeat();
+            });
+
+            peer.on('connection', function(conn) {
+                conn.on('open', function() {
+                    connections.set(conn.peer, conn);
+                    updateParticipants();
+                    
+                    // Send room info to new connection
+                    conn.send({
+                        type: 'room_info',
+                        roomName: currentRoom,
+                        currentPart: getDisplayValue('currentPartHost'),
+                        nashvilleNumber: getDisplayValue('nashvilleNumberHost'),
+                        currentDynamics: getDisplayValue('dynamicsHost')
+                    });
+                });
+
+                conn.on('data', function(data) {
+                    if (data.type === 'discovery_request') {
+                        conn.send({
+                            type: 'discovery_response',
+                            roomId: peer.id,
+                            roomName: currentRoom,
+                            participants: connections.size + 1
+                        });
+                    }
+                });
+
+                conn.on('close', function() {
+                    connections.delete(conn.peer);
+                    updateParticipants();
+                });
+
+                conn.on('error', function(err) {
+                    console.error('Connection error:', err);
+                    connections.delete(conn.peer);
+                    updateParticipants();
+                });
+            });
+
+            peer.on('error', function(err) {
+                console.error('Peer error:', err);
+                showStatus('Error creating room: ' + err.message, 'error');
+            });
+        }
+
+        function startDiscoveryBeacon() {
+            // Create multiple discovery peers with well-known IDs
+            const beacons = [];
+            
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    const beaconId = generateDiscoveryId();
+                    const beacon = new Peer(beaconId);
+                    
+                    beacon.on('open', function() {
+                        beacons.push(beacon);
+                    });
+                    
+                    beacon.on('connection', function(conn) {
+                        conn.on('data', function(data) {
+                            if (data.type === 'discovery_request') {
+                                conn.send({
+                                    type: 'discovery_response',
+                                    roomId: peer.id,
+                                    roomName: currentRoom,
+                                    participants: connections.size + 1
+                                });
+                            }
+                        });
+                    });
+                    
+                    beacon.on('error', function(err) {
+                        console.log('Beacon error:', err);
+                    });
+                }, i * 1000);
+            }
+            
+            // Clean up beacons when room ends
+            peer.on('close', function() {
+                beacons.forEach(beacon => {
+                    if (beacon && !beacon.destroyed) {
+                        beacon.destroy();
+                    }
+                });
+            });
+        }
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (peer && peer.open) {
+                    // Maintain connections and discovery
+                    connections.forEach((conn, peerId) => {
+                        if (!conn.open) {
+                            connections.delete(peerId);
+                            updateParticipants();
+                        }
+                    });
+                } else {
+                    clearInterval(heartbeatInterval);
+                }
+            }, 10000);
+        }
+
+        function discoverRooms() {
+            showStatus('Searching for rooms...', 'waiting');
+            availableRooms.clear();
+            updateRoomsList();
+            
+            // Create discovery peer
+            if (discoveryPeer) {
+                discoveryPeer.destroy();
+            }
+            
+            discoveryPeer = new Peer();
+            
+            discoveryPeer.on('open', function() {
+                let attempts = 0;
+                let foundRooms = 0;
+                const maxAttempts = 18; // 3 prefixes × 6 suffixes
+                
+                // Try connecting to well-known discovery beacon IDs
+                DISCOVERY_PREFIXES.forEach((prefix, pi) => {
+                    DISCOVERY_SUFFIXES.forEach((suffix, si) => {
+                        setTimeout(() => {
+                            const beaconId = prefix + suffix;
+                            const conn = discoveryPeer.connect(beaconId);
+                            
+                            const timeout = setTimeout(() => {
+                                attempts++;
+                                if (attempts >= maxAttempts) {
+                                    finishDiscovery(foundRooms);
+                                }
+                            }, 3000);
+                            
+                            conn.on('open', function() {
+                                conn.send({ type: 'discovery_request' });
+                                
+                                conn.on('data', function(data) {
+                                    if (data.type === 'discovery_response') {
+                                        availableRooms.set(data.roomId, {
+                                            id: data.roomId,
+                                            name: data.roomName,
+                                            participants: data.participants
+                                        });
+                                        foundRooms++;
+                                        updateRoomsList();
+                                    }
+                                });
+                                
+                                setTimeout(() => {
+                                    clearTimeout(timeout);
+                                    conn.close();
+                                    attempts++;
+                                    if (attempts >= maxAttempts) {
+                                        finishDiscovery(foundRooms);
+                                    }
+                                }, 2000);
+                            });
+                            
+                            conn.on('error', function() {
+                                clearTimeout(timeout);
+                                attempts++;
+                                if (attempts >= maxAttempts) {
+                                    finishDiscovery(foundRooms);
+                                }
+                            });
+                        }, (pi * 6 + si) * 500); // Stagger connection attempts
+                    });
+                });
+            });
+            
+            discoveryPeer.on('error', function(err) {
+                console.log('Discovery peer error:', err);
+                finishDiscovery(0);
+            });
+        }
+
+        function finishDiscovery(foundRooms) {
+            setTimeout(() => {
+                if (foundRooms === 0 && availableRooms.size === 0 && document.getElementById('app').style.display === 'none') {
+                    showStatus('No rooms found on network', 'error');
+                    document.getElementById('noRoomsMessage').style.display = 'block';
+                } else {
+                    document.getElementById('status').style.display = 'none';
+                    document.getElementById('noRoomsMessage').style.display = 'none';
+                }
+            }, 1000);
+        }
+
+        function updateRoomsList() {
+            const roomsList = document.getElementById('roomsList');
+            roomsList.innerHTML = '';
+
+            availableRooms.forEach(room => {
+                const roomDiv = document.createElement('div');
+                roomDiv.className = 'room-item';
+                roomDiv.onclick = () => joinSpecificRoom(room.id, room.name);
+                
+                roomDiv.innerHTML = `
+                    <div>
+                        <h4>${room.name}</h4>
+                        <p>${room.participants} participant${room.participants !== 1 ? 's' : ''}</p>
+                    </div>
+                `;
+                
+                roomsList.appendChild(roomDiv);
+            });
+        }
+
+        function joinSpecificRoom(roomId, roomName) {
+            currentRoom = roomName;
+            joinRoom(roomId);
+        }
+
+        function manualJoin() {
+            const roomId = document.getElementById('manualRoomId').value.trim();
+            if (!roomId) {
+                showStatus('Please enter a Room ID', 'error');
+                return;
+            }
+            joinRoom(roomId);
+        }
+
+        function joinRoom(roomId) {
+            showStatus('Connecting...', 'waiting');
+            
+            peer = new Peer();
+
+            peer.on('open', function(id) {
+                hostConnection = peer.connect(roomId);
+                
+                hostConnection.on('open', function() {
+                    showStatus('Connected!', 'connected');
+                    showApp();
+                    
+                    // Request room info
+                    hostConnection.send({ type: 'discovery_request' });
+                });
+
+                hostConnection.on('data', function(data) {
+                    handleIncomingData(data);
+                });
+
+                hostConnection.on('close', function() {
+                    showStatus('Connection lost', 'error');
+                    setTimeout(returnToStart, 2000);
+                });
+
+                hostConnection.on('error', function(err) {
+                    console.error('Connection error:', err);
+                    showStatus('Failed to connect: ' + err.message, 'error');
+                });
+            });
+
+            peer.on('error', function(err) {
+                console.error('Peer error:', err);
+                showStatus('Connection failed: ' + err.message, 'error');
+            });
+        }
+
+        function handleIncomingData(data) {
+            switch(data.type) {
+                case 'room_info':
+                case 'discovery_response':
+                    if (data.roomName) {
+                        currentRoom = data.roomName;
+                        document.getElementById('currentRoom').textContent = currentRoom;
+                    }
+                    if (data.currentPart && data.currentPart !== '—') {
+                        updateDisplay('currentPart', data.currentPart);
+                    }
+                    if (data.nashvilleNumber && data.nashvilleNumber !== '—') {
+                        updateDisplay('nashvilleNumber', data.nashvilleNumber);
+                    }
+                    if (data.currentDynamics && data.currentDynamics !== '—') {
+                        updateDisplay('currentDynamics', data.currentDynamics);
+                    }
+                    break;
+                case 'part_update':
+                    updateDisplay('currentPart', data.part);
+                    break;
+                case 'nashville_update':
+                    updateDisplay('nashvilleNumber', data.number);
+                    break;
+                case 'dynamics_update':
+                    updateDisplay('currentDynamics', data.dynamics);
+                    break;
+                case 'room_ended':
+                    showStatus('Room ended by host', 'error');
+                    setTimeout(returnToStart, 2000);
+                    break;
+            }
+        }
+
+        function getDisplayValue(elementId) {
+            const element = document.getElementById(elementId);
+            const text = element.textContent.trim();
+            return text === '—' ? '' : text;
+        }
+
+        function updateDisplay(elementId, value) {
+            // Clear any existing timer for this element
+            const timerKey = elementId;
+            if (activeTimers.has(timerKey)) {
+                clearTimeout(activeTimers.get(timerKey));
+                activeTimers.delete(timerKey);
+            }
+
+            // Update client display with flash effect
+            const clientElement = document.getElementById(elementId);
+            if (clientElement) {
+                clientElement.innerHTML = value;
+                
+                let sectionId;
+                if (elementId === 'currentPart') {
+                    sectionId = 'partSection';
+                } else if (elementId === 'currentDynamics') {
+                    sectionId = 'dynamicsSection';
+                } else {
+                    sectionId = 'nashvilleSection';
+                }
+                
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    // Add flash effect
+                    section.classList.add('flash');
+                    section.classList.add('active');
+                    
+                    // Remove flash effect after animation
+                    setTimeout(() => {
+                        section.classList.remove('flash');
+                    }, 300);
+                    
+                    // Set timer to clear display after 10 seconds
+                    const clearTimer = setTimeout(() => {
+                        clientElement.innerHTML = '<span class="placeholder">—</span>';
+                        section.classList.remove('active');
+                        activeTimers.delete(timerKey);
+                    }, 10000);
+                    
+                    activeTimers.set(timerKey, clearTimer);
+                }
+            }
+
+            // Update host display
+            let hostElementId;
+            if (elementId === 'currentPart') {
+                hostElementId = 'currentPartHost';
+            } else if (elementId === 'currentDynamics') {
+                hostElementId = 'dynamicsHost';
+            } else {
+                hostElementId = 'nashvilleNumberHost';
+            }
+            
+            const hostElement = document.getElementById(hostElementId);
+            if (hostElement) {
+                // Clear any existing timer for host element
+                const hostTimerKey = hostElementId;
+                if (activeTimers.has(hostTimerKey)) {
+                    clearTimeout(activeTimers.get(hostTimerKey));
+                    activeTimers.delete(hostTimerKey);
+                }
+
+                hostElement.textContent = value;
+                
+                // Set timer to clear host display after 10 seconds
+                const hostClearTimer = setTimeout(() => {
+                    hostElement.textContent = '—';
+                    activeTimers.delete(hostTimerKey);
+                }, 10000);
+                
+                activeTimers.set(hostTimerKey, hostClearTimer);
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Error attempting to enable fullscreen:', err);
+                    // For iOS Safari, try webkitRequestFullscreen
+                    if (document.documentElement.webkitRequestFullscreen) {
+                        document.documentElement.webkitRequestFullscreen();
+                    }
+                });
+                document.getElementById('fullscreenBtn').textContent = '📱';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+                document.getElementById('fullscreenBtn').textContent = '📱';
+            }
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggles = document.querySelectorAll('.theme-toggle');
+            
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                themeToggles.forEach(toggle => toggle.textContent = '🌙');
+            } else {
+                body.classList.add('dark-theme');
+                themeToggles.forEach(toggle => toggle.textContent = '☀️');
+            }
+        }
+
+        function toggleColors() {
+            const body = document.body;
+            const colorToggle = document.getElementById('colorToggle');
+            
+            if (colorsEnabled) {
+                body.classList.add('no-colors');
+                colorToggle.textContent = '⚫';
+                colorsEnabled = false;
+            } else {
+                body.classList.remove('no-colors');
+                colorToggle.textContent = '🎨';
+                colorsEnabled = true;
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+
+        function showApp() {
+            document.getElementById('setup').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            
+            document.getElementById('currentRoom').textContent = currentRoom;
+            
+            // Sync theme toggle state
+            const setupToggle = document.getElementById('themeToggle');
+            const appToggle = document.getElementById('appThemeToggle');
+            const participantsToggle = document.querySelector('.participants-theme-toggle');
+            if (appToggle) {
+                appToggle.textContent = setupToggle.textContent;
+            }
+            if (participantsToggle) {
+                participantsToggle.textContent = setupToggle.textContent;
+            }
+            
+            if (isHost) {
+                document.getElementById('hostLayout').style.display = 'grid';
+                document.getElementById('clientLayout').style.display = 'none';
+                // Add participants to the host layout
+                document.getElementById('hostLayout').appendChild(document.getElementById('participants'));
+                document.getElementById('participants').style.display = 'flex';
+            } else {
+                document.getElementById('hostLayout').style.display = 'none';
+                document.getElementById('clientLayout').style.display = 'grid';
+                document.getElementById('participants').style.display = 'none';
+            }
+        }
+
+        function sendPart(part) {
+            updateDisplay('currentPart', part);
+            broadcast({
+                type: 'part_update',
+                part: part
+            });
+        }
+
+        function sendDynamics(dynamics) {
+            updateDisplay('currentDynamics', dynamics);
+            broadcast({
+                type: 'dynamics_update',
+                dynamics: dynamics
+            });
+        }
+
+        function sendNashville(number) {
+            if (progressionMode) {
+                // Add to progression
+                currentProgression.push(number);
+                const progressionText = currentProgression.join(' - ');
+                updateDisplay('nashvilleNumber', progressionText);
+                broadcast({
+                    type: 'nashville_update',
+                    number: progressionText
+                });
+            } else {
+                // Send single number as normal
+                updateDisplay('nashvilleNumber', number);
+                broadcast({
+                    type: 'nashville_update',
+                    number: number
+                });
+            }
+        }
+
+        function toggleProgression() {
+            const toggleBtn = document.getElementById('progressionToggle');
+            
+            if (progressionMode) {
+                // Turn off progression mode
+                progressionMode = false;
+                currentProgression = [];
+                toggleBtn.classList.remove('active');
+                toggleBtn.textContent = 'PROG';
+            } else {
+                // Turn on progression mode
+                progressionMode = true;
+                currentProgression = [];
+                toggleBtn.classList.add('active');
+                toggleBtn.textContent = 'END';
+            }
+        }
+
+        function broadcast(data) {
+            connections.forEach(conn => {
+                if (conn.open) {
+                    conn.send(data);
+                }
+            });
+        }
+
+        function updateParticipants() {
+            const participantList = document.getElementById('participantList');
+            const participantCount = document.getElementById('participantCount');
+            
+            participantList.innerHTML = '';
+            
+            if (isHost) {
+                const hostSpan = document.createElement('span');
+                hostSpan.className = 'participant';
+                hostSpan.textContent = 'You (Host)';
+                participantList.appendChild(hostSpan);
+            }
+
+            let count = isHost ? 1 : 0;
+            
+            connections.forEach((conn, peerId) => {
+                if (conn.open) {
+                    const span = document.createElement('span');
+                    span.className = 'participant';
+                    span.textContent = `Musician ${peerId.substr(-4)}`;
+                    participantList.appendChild(span);
+                    count++;
+                }
+            });
+
+            if (hostConnection && hostConnection.open && !isHost) {
+                const hostSpan = document.createElement('span');
+                hostSpan.className = 'participant';
+                hostSpan.textContent = 'Host';
+                participantList.appendChild(hostSpan);
+                count++;
+            }
+
+            if (!isHost && count === 0) {
+                count = 1; // Count self
+                const selfSpan = document.createElement('span');
+                selfSpan.className = 'participant';
+                selfSpan.textContent = 'You';
+                participantList.appendChild(selfSpan);
+            }
+            
+            participantCount.textContent = count;
+        }
+
+        function endRoom() {
+            const confirmDialog = confirm('Are you sure you want to end this room?\n\nThis will disconnect all musicians.');
+            
+            if (confirmDialog) {
+                // Send end room signal to all connected clients
+                broadcast({
+                    type: 'room_ended'
+                });
+                
+                showStatus('Room ended. Disconnecting...', 'waiting');
+                
+                // Give time for the message to be sent, then close everything
+                setTimeout(() => {
+                    returnToStart();
+                }, 1500);
+            }
+        }
+
+        function returnToStart() {
+            // Clear all active timers
+            activeTimers.forEach(timer => clearTimeout(timer));
+            activeTimers.clear();
+
+            // Reset progression state
+            progressionMode = false;
+            currentProgression = [];
+
+            // Reset color state
+            colorsEnabled = true;
+
+            // Clean up all connections and peers
+            if (peer) {
+                peer.destroy();
+            }
+            if (discoveryPeer) {
+                discoveryPeer.destroy();
+            }
+            if (broadcastChannel) {
+                broadcastChannel.close();
+            }
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+            }
+            
+            connections.clear();
+            availableRooms.clear();
+            hostConnection = null;
+            currentRoom = null;
+            currentMode = null;
+            isHost = false;
+            peer = null;
+            discoveryPeer = null;
+            broadcastChannel = null;
+            heartbeatInterval = null;
+
+            document.getElementById('app').style.display = 'none';
+            document.getElementById('setup').style.display = 'flex';
+            document.getElementById('participants').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
+            document.getElementById('roomSection').style.display = 'none';
+            document.getElementById('hostLayout').style.display = 'none';
+            document.getElementById('clientLayout').style.display = 'none';
+            
+            document.getElementById('currentPart').innerHTML = '<span class="placeholder">—</span>';
+            document.getElementById('nashvilleNumber').innerHTML = '<span class="placeholder">—</span>';
+            document.getElementById('currentDynamics').innerHTML = '<span class="placeholder">—</span>';
+            document.getElementById('currentPartHost').textContent = '—';
+            document.getElementById('nashvilleNumberHost').textContent = '—';
+            document.getElementById('dynamicsHost').textContent = '—';
+            document.getElementById('roomInput').value = '';
+            document.getElementById('manualRoomId').value = '';
+            document.getElementById('roomsList').innerHTML = '';
+            
+            // Reset progression toggle
+            const toggleBtn = document.getElementById('progressionToggle');
+            if (toggleBtn) {
+                toggleBtn.classList.remove('active');
+                toggleBtn.textContent = 'PROG';
+            }
+            
+            // Reset color toggle
+            const colorToggle = document.getElementById('colorToggle');
+            if (colorToggle) {
+                colorToggle.textContent = '🎨';
+                document.body.classList.remove('no-colors');
+            }
+            
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('selected'));
+        }
+
+        // Auto-reconnection for clients
+        setInterval(() => {
+            if (!isHost && hostConnection && !hostConnection.open && peer) {
+                updateParticipants();
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
