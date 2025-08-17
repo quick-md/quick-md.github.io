@@ -536,15 +536,6 @@
             justify-content: center;
         }
 
-        .dynamics-display .display-label {
-            font-size: 1.6rem;
-            margin-bottom: 20px;
-        }
-
-        .dynamics-display .display-large {
-            font-size: 4.5rem;
-        }
-
         .dynamics-display.active {
             border-color: var(--accent-color);
             transform: scale(1.02);
@@ -737,7 +728,7 @@
 
             .client-top-controls .btn.compact {
                 font-size: 0.8rem;
-                height: 32px;
+                height: 40px;
                 padding: 6px 10px;
             }
 
@@ -746,7 +737,7 @@
                 flex-direction: column;
                 gap: 12px;
                 padding: 0;
-                height: calc(100vh - 64px);
+                height: calc(100vh - 85px);
             }
 
             .display-section,
@@ -757,11 +748,11 @@
             }
 
             .display-large {
-                font-size: 2.8rem;
+                font-size: 4rem;
             }
 
             .display-label {
-                font-size: 1rem;
+                font-size: 1.4rem;
                 margin-bottom: 8px;
             }
         }
@@ -938,8 +929,9 @@
             /* Client desktop layout - fill screen properly */
             .client-displays {
                 grid-template-columns: 1fr 1fr;
-                grid-template-rows: 1fr auto;
+                grid-template-rows: .85fr auto;
                 gap: 25px;
+        	height: 97%;
             }
 
             .chord-section {
@@ -982,6 +974,7 @@
     display: flex;
     flex-direction: row;
     gap: 8px;
+    height: 97%;
   }
 
   .display-section,
@@ -993,13 +986,13 @@
   }
 
   .display-large {
-    font-size: 2rem;
+    font-size: 4rem;
     text-align: center;
     word-wrap: break-word;
   }
 
   .display-label {
-    font-size: 0.9rem;
+    font-size: 1.4rem;
     margin-bottom: 6px;
     text-align: center;
   }
@@ -1007,6 +1000,8 @@
   .client-top-controls .btn.danger.compact {
     flex: 1;
     height: 100%;
+    padding-left: 20px;
+    padding-right: 20px;
   }
 
   .client-top-controls {
@@ -1083,7 +1078,7 @@
 <button class="control-btn" onclick="sendDynamics('Build')">Build</button>
 <button class="control-btn" onclick="sendDynamics('Quiet')">Quiet</button>
 <button class="control-btn" onclick="sendDynamics('Big')">Big</button>
-<button class="control-btn" onclick="sendDynamics('Build to Cut Quiet')">Build Cut</button>
+<button class="control-btn" onclick="sendDynamics('Big Build to Cut')">Build Cut</button>
 </div>
 <div class="nashville-container">
 <button class="control-btn progression-toggle" id="progressionToggle" onclick="toggleProgression()">PROG</button>
