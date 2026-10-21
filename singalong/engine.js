@@ -1,6 +1,6 @@
 // The app's brain: hearing -> identifying -> following. No DOM, so it can be tested.
 import { tokens, distinctive } from './matcher.js';
-import { LyricTracker } from './tracker.js';
+import { LyricTracker, similar } from './tracker.js';
 import { isWorship } from './worship.js';
 
 export const DISMISS_WINDOW_MS = 6000;
@@ -8,6 +8,17 @@ export const HINT = {
   lyrics: "Sing a line or two and I'll find the song.",
   title: 'Say the song title. Add the artist if you like.',
 };
+
+/**
+ * Does this song's title match what was said? ("How Great Thou Art (Live)" matches "how great thou art"
+ * and "how great thou art elvis".) Used so worship mode doesn't throw out the song you named.
+ */
+export function titleMatches(songTitle, heard) {
+  const clean = String(songTitle || '').replace(/[(\[].*?[)\]]/g, ' ').replace(/\s[-–].*$/, ' ');
+  const want = tokens(clean);
+  if (want.length === 0) return false;
+  return want.every((w) => heard.some((h) => similar(w, h)));
+}
 
 export class Engine {
   /**
@@ -201,8 +212,11 @@ export class Engine {
       const r = await this.api.title({ q: raw.join(' '), alt, n: worship ? 6 : 3, exclude: [...this.rejected] });
       if (epoch !== this.epoch) return;
       if (r.cooling) { this.setListeningStatus('Busy for a moment. Say the title again.'); return; }
+      // Worship mode keeps worship songs, and also the song you actually named.
+      const said = [...new Set([...raw, ...fixed])];
+      const ok = (song) => !worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said);
       for (const song of r.songs) {
-        if (worship && !isWorship(song.artist, song.lines)) continue;
+        if (!ok(song)) continue;
         const t = LyricTracker.start(song.lines.map(tokens));
         if (!t) continue;
         this.present(song, t);
@@ -210,9 +224,13 @@ export class Engine {
       }
       const c = await this.api.close({ q: raw.join(' '), alt, exclude: [...this.rejected] });
       if (epoch !== this.epoch) return;
-      const options = c.songs
-        .filter((s) => !this.rejected.has(s.key) && (!worship || isWorship(s.artist, s.lines)))
-        .slice(0, 4);
+      const options = c.songs.filter((x) => !this.rejected.has(x.key) && ok(x)).slice(0, 4);
+      // The top close match is exactly the title you said: open it, as with any first match.
+      const first = options[0];
+      if (first && titleMatches(first.title, said)) {
+        const t = LyricTracker.start(first.lines.map(tokens));
+        if (t) { this.present(first, t); return; }
+      }
       if (options.length) this.set({ phase: 'suggesting', heard: text, options });
       else this.setListeningStatus(worship ? 'No worship song found for that. Say the title again.' : "Couldn't find that one. Say the title again.");
     } catch (e) {

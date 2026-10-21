@@ -15,6 +15,11 @@ const artistPhrases = [
   'upper room', 'sean feucht', 'rend collective', 'casting crowns', 'lauren daigle',
   'sovereign grace', 'gateway worship', 'united pursuit', 'worship central',
   'all sons & daughters', 'david crowder', 'third day', 'worship',
+  'bethel music', 'cece winans', 'zach williams', 'for king & country', 'for king and country',
+  'mercyme', 'newsboys', 'francesca battistelli', 'matt maher', 'andrew peterson', 'cory asbury',
+  'mosaic msc', 'northridge', 'dante bowe', 'naomi raine', 'travis greene', 'kirk franklin',
+  'tauren wells', 'anne wilson', 'jeremy camp', 'natalie grant', 'kutless', 'jesus image',
+  'chris tomlin', 'hymn', 'choir', 'cityalight', 'integrity music', 'vineyard', 'sidewalk prophets',
 ];
 
 const artistExact = new Set(['passion', 'hope', 'life.church worship']);
@@ -26,6 +31,7 @@ const strongWords = new Set([
 
 const weakWords = new Set([
   'lord', 'holy', 'heaven', 'cross', 'praise', 'worship', 'lamb', 'gospel', 'glory', 'grace',
+  'thou', 'thee', 'thy', 'mercy', 'worthy', 'faithful', 'blessed',
 ]);
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
