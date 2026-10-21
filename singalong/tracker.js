@@ -11,6 +11,7 @@ const LOOKAHEAD = 2;
 const RECENT = 6;
 const MARGIN = 2;
 const INIT_WINDOW = 8;
+const PHRASE_WINDOW = 10;
 const MIN_INIT_WORDS = 3;
 
 // ---- word similarity --------------------------------------------------------------------
@@ -81,6 +82,10 @@ export function similar(a, b) {
   return ka.length >= 4 && kb.length >= 4 && Math.abs(ka.length - kb.length) <= 1 && withinOneEdit(ka, kb);
 }
 
+const FILLER = new Set(['the', 'a', 'an', 'and', 'of', 'to', 'in', 'is', 'i', 'you', 'my', 'me', 'your', 'we', 'he', 'it', 'that', 'as', 'on', 'for', 'with', 'are', 'be', 'will', 'our', 'all', 'his', 'her', 'so', 'oh', 'but', 'am', 'was', 'at', 'by', 'us', 'no', 'not']);
+/** How much a word says about which song it is: little words count for less. */
+export const weight = (w) => (FILLER.has(w) ? 0.4 : 1);
+
 // ---- the tracker ------------------------------------------------------------------------
 
 export class LyricTracker {
@@ -109,6 +114,8 @@ export class LyricTracker {
     this.relocated = false;
     this.anchored = true; // false for a song opened from the top until the singer is really following it
     this.matches = 0;
+    this.run = 0; // words matched one after another, allowing a single miss
+    this.missStreak = 0;
   }
 
   /** Tracker that starts at the top of the song (picked by title). */
@@ -147,6 +154,32 @@ export class LyricTracker {
     return null;
   }
 
+  /**
+   * How well do the heard words fit these lyrics? Forgiving: a misheard word, a dropped word or an
+   * extra word costs a little, little words ("the", "and") count for less than distinctive ones, and
+   * the last one or two words may be wrong. Returns { score, ratio } (ratio 0..1) or null.
+   */
+  static rank(lines, heard) {
+    const t = new LyricTracker(lines);
+    if (t.words.length === 0) return null;
+    let best = null;
+    for (let drop = 0; drop <= 2; drop++) {
+      const window = heard.slice(0, heard.length - drop).slice(-INIT_WINDOW);
+      if (window.length < MIN_INIT_WORDS) continue;
+      const total = window.reduce((a, w) => a + weight(w), 0);
+      const anchor = window[window.length - 1];
+      let top = 0;
+      for (let q = 0; q < t.words.length; q++) {
+        if (!similar(t.words[q], anchor)) continue;
+        const lo = Math.max(0, q - window.length - 2);
+        top = Math.max(top, weight(anchor) + t.lcs(window, window.length - 1, lo, q, true));
+      }
+      const ratio = top / total;
+      if (top > 0 && (!best || ratio > best.ratio)) best = { score: top, ratio, words: window.length };
+    }
+    return best;
+  }
+
   /** Call when the speech engine ends an utterance. */
   endUtterance() {
     this.newUtterance = true;
@@ -156,7 +189,7 @@ export class LyricTracker {
    * Feed the words of the CURRENT utterance (whole utterance so far). `final` ends it.
    * Returns true if the singer made progress.
    */
-  update(tokens, final) {
+  update(tokens, final, boundary = final) {
     if (this.newUtterance) {
       this.consumed = 0;
       this.newUtterance = false;
@@ -175,12 +208,51 @@ export class LyricTracker {
         progressed = true;
       }
     }
-    if (final) this.newUtterance = true;
+    if (this.phraseJump(tokens)) progressed = true;
+    if (boundary) this.newUtterance = true;
     if (this.relocated) {
       progressed = true;
       this.relocated = false;
     }
     return progressed;
+  }
+
+  /**
+   * A whole phrase arrives at once from Whisper, so judge it as a whole: if the last several words
+   * fit one place in the song clearly better than where we are, go there now. If the words fit
+   * several places (a repeated chorus), take the nearest one ahead, never one far behind.
+   */
+  phraseJump(tokens) {
+    if (tokens.length < 5) return false;
+    let best = null;
+    for (const attempt of [tokens, tokens.slice(0, -1)]) {
+      const window = attempt.slice(-PHRASE_WINDOW);
+      if (window.length < 5) continue;
+      const total = window.reduce((a, w) => a + weight(w), 0);
+      const need = Math.max(3.2, 0.65 * total);
+      const cands = this.candidates(window, need, true);
+      if (cands.length === 0) continue;
+      const top = Math.max(...cands.map((c) => c.score));
+      if (this.scoreHere(window, true) + 1 >= top) continue; // already where these words are, or no clear gain
+      const ratio = top / total;
+      if (!best || ratio > best.ratio) best = { ratio, cands: cands.filter((c) => c.score >= top - 0.01) };
+    }
+    if (!best) return false;
+    const rank = (c) => (c.q + 1 >= this.pos ? c.q + 1 - this.pos : 100000 + (this.pos - c.q - 1));
+    const pick = best.cands.reduce((a, b) => (rank(b) < rank(a) ? b : a));
+    const q = pick.q;
+    if (q + 1 === this.pos) return false;
+    this.pos = q + 1;
+    const l = this.lineOf[q];
+    this.line = this.repeatsRecentLine(l, this.pos - this.lineStart[l]) ? Math.max(0, l - 1) : l;
+    this.consumed = Math.max(this.consumed, tokens.length);
+    this.recent = [];
+    this.pending = null;
+    this.certain = best.cands.length === 1;
+    this.anchored = true;
+    this.relocated = true;
+    this.run = 0;
+    return true;
   }
 
   consume(w, next, exactOnly) {
@@ -223,6 +295,8 @@ export class LyricTracker {
   }
 
   onMatch(w) {
+    this.run++;
+    this.missStreak = 0;
     if (++this.matches >= 3) this.anchored = true;
     this.note(w, true);
     this.advanceDisplay();
@@ -230,6 +304,7 @@ export class LyricTracker {
   }
 
   onMiss(w) {
+    if (++this.missStreak >= 2) this.run = 0; // one misheard word doesn't break the flow
     this.note(w, false);
     this.checkAlignment();
   }
@@ -241,8 +316,11 @@ export class LyricTracker {
     if (l > this.line) {
       const matched = this.pos - this.lineStart[l];
       const need = Math.min(2, this.lineLen[l]);
-      if (matched >= need && !this.repeatsRecentLine(l, matched) && (this.certain || this.supportedUniquely())) {
-        this.line = l;
+      if (matched >= need) {
+        // Singing straight on from the end of the line we were on is proof enough, even when the lines
+        // repeat. Anything else (a jump, or a line that looks like a recent one) needs to be certain.
+        const flowed = l === this.line + 1 && this.run >= matched + Math.min(2, this.lineLen[this.line]);
+        if (flowed || (!this.repeatsRecentLine(l, matched) && (this.certain || this.supportedUniquely()))) this.line = l;
       }
     }
   }
@@ -274,9 +352,9 @@ export class LyricTracker {
     return true;
   }
 
-  scoreHere(window) {
+  scoreHere(window, weighted = false) {
     const lo = Math.max(0, this.pos - window.length - 1);
-    return this.lcs(window, window.length, lo, this.pos);
+    return this.lcs(window, window.length, lo, this.pos, weighted);
   }
 
   checkAlignment() {
@@ -331,20 +409,20 @@ export class LyricTracker {
     }
   }
 
-  candidates(window, minScore) {
+  candidates(window, minScore, weighted = false) {
     const out = [];
     const w = window.length;
     const last = window[w - 1];
     for (let q = 0; q < this.words.length; q++) {
       if (!similar(this.words[q], last)) continue;
       const lo = Math.max(0, q - w - 1);
-      const s = 1 + this.lcs(window, w - 1, lo, q);
+      const s = (weighted ? weight(last) : 1) + this.lcs(window, w - 1, lo, q, weighted);
       if (s >= minScore) out.push({ q, score: s });
     }
     return out;
   }
 
-  lcs(window, n, lo, hi) {
+  lcs(window, n, lo, hi, weighted = false) {
     if (n <= 0 || hi <= lo) return 0;
     const m = hi - lo;
     let prev = new Array(m + 1).fill(0);
@@ -352,7 +430,7 @@ export class LyricTracker {
       const cur = new Array(m + 1).fill(0);
       for (let j = 1; j <= m; j++) {
         cur[j] = similar(window[i - 1], this.words[lo + j - 1])
-          ? prev[j - 1] + 1
+          ? prev[j - 1] + (weighted ? weight(window[i - 1]) : 1)
           : Math.max(prev[j], cur[j - 1]);
       }
       prev = cur;

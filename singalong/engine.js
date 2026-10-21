@@ -22,9 +22,23 @@ export function titleMatches(songTitle, heard) {
 }
 
 const startsWith = (a, b) => b.length <= a.length && b.every((w, i) => a[i] === w);
-const DUP_MS = 900; // an "extended" repeat of a just-finished phrase this soon is the same phrase, not a new one
+const SAME_PHRASE_MS = 3000; // a finished phrase this long ago is over: more words after it start a new phrase
+const REPEAT_MS = 1200; // the very same words again after this long are the singer repeating the line
+
+/** How many words of `a` appear, in order, in `b` (sound-alikes count). */
+function fuzzyLcs(a, b) {
+  let prev = new Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = new Array(b.length + 1).fill(0);
+    for (let j = 1; j <= b.length; j++) cur[j] = similar(a[i - 1], b[j - 1]) ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+    prev = cur;
+  }
+  return prev[b.length];
+}
 
 /** Join phrases, dropping echoes: some phones report "king", "king of", "king of kings" as separate results. */
+const titleKey = (song) => tokens(String(song.title).replace(/[(\[].*?[)\]]/g, ' ').replace(/\s[-–].*$/, ' ')).join(' ');
+
 export function mergeParts(parts) {
   const out = [];
   for (const p of parts.filter(Boolean)) {
@@ -64,9 +78,8 @@ export class Engine {
     this.epoch = 0; // bumps whenever the listening session is reset, so stale lookups are dropped
     this.dismissTimer = null;
     this.now = deps.now || (() => Date.now());
-    this.lastFinal = []; // words of the phrase that just finished, to spot echoes of it
-    this.lastFinalAt = 0;
-    this.skipPrefix = 0; // while following: leading words of this result that were already counted
+    this.prev = null; // the previous result {toks, final, at}: how a new result relates to it decides everything
+    this.phrase = []; // words of the phrase being sung right now
     this.titleDelay = deps.titleDelayMs ?? TITLE_PAUSE_MS;
     this.titleTimer = null;
     this.titleFinals = []; // finished phrases of the title being spoken
@@ -134,6 +147,8 @@ export class Engine {
     this.tracker = null;
     this.committed = [];
     this.utteranceStable = [];
+    this.prev = null;
+    this.phrase = [];
     this.lastQueryTail = [];
     this.lookupBusy = false;
     this.set({ phase: 'listening', heard: '', status, isHint: true, options: null, lyrics: null });
@@ -147,23 +162,35 @@ export class Engine {
   // ---- hearing ----
   repair(words) { const v = this.getVocab(); return v ? v.snapAll(words) : words; }
 
-  /** Is this result an echo of the phrase that just finished? 'same' (nothing new), 'longer' (same start, more words) or null. */
-  echoOf(toks) {
-    const f = this.lastFinal;
-    if (!f.length || this.now() - this.lastFinalAt > DUP_MS) return null;
-    if (startsWith(f, toks)) return 'same';
-    if (startsWith(toks, f)) return 'longer';
-    return null;
+  /**
+   * How does this result relate to the one before? Judged by the words, not the clock, because phones
+   * differ: some send "king", "king of", "king of kings" as separate results (each growing the last),
+   * others send each phrase once. Returns 'new' (a new phrase), 'grow' (the same phrase with more
+   * words) or 'same' (nothing new).
+   */
+  relate(toks, isFinal) {
+    const p = this.prev;
+    const now = this.now();
+    this.prev = { toks, final: isFinal, at: now };
+    if (!p || p.toks.length === 0) return 'new';
+    if (toks.length < p.toks.length - 1) return 'new';
+    if (fuzzyLcs(p.toks, toks) < Math.ceil(0.6 * p.toks.length)) return 'new';
+    const gap = now - p.at;
+    const identical = toks.length === p.toks.length && fuzzyLcs(p.toks, toks) === toks.length;
+    if (p.final && (gap > SAME_PHRASE_MS || (identical && gap > REPEAT_MS))) return 'new';
+    return toks.length > p.toks.length ? 'grow' : 'same';
   }
 
   onBlank() {
-    this.lastFinal = [];
-    this.skipPrefix = 0;
+    if (this.phrase.length) { this.committed.push(...this.phrase); this.trimCommitted(); }
+    this.phrase = [];
+    this.prev = null;
     if (this.titleCurrent) { this.titleFinals.push(this.titleCurrent); this.titleCurrent = ''; }
     this.boundaries++;
     this.utteranceStable = [];
     this.tracker?.endUtterance();
   }
+  trimCommitted() { while (this.committed.length > 16) this.committed.shift(); }
 
   onHeard(text, isFinal) {
     if (!text) return this.onBlank();
@@ -183,35 +210,26 @@ export class Engine {
         return;
       }
       const toks = this.repair(tokens(text));
-      const echo = this.echoOf(toks);
-      if (echo === 'same') return; // the phone repeating what it just reported
-      if (echo === 'longer') { // the same phrase, now with more words: replace it, don't add it twice
-        this.committed.splice(Math.max(0, this.committed.length - this.lastFinal.length));
-        this.lastFinal = [];
+      const rel = this.relate(toks, isFinal);
+      if (rel === 'new') { // the phrase before is finished: keep its words, start a fresh phrase
+        if (this.phrase.length) { this.committed.push(...this.phrase); this.trimCommitted(); }
+        this.boundaries++;
       }
+      this.phrase = toks;
       this.set({ heard: text });
       const v = this.getVocab();
       const lastIsWord = toks.length && v ? v.isWord(toks[toks.length - 1]) : false;
       this.utteranceStable = isFinal || lastIsWord ? toks : toks.slice(0, -1);
       this.maybeLookup();
-      if (isFinal) {
-        this.committed.push(...toks);
-        while (this.committed.length > 16) this.committed.shift();
-        this.lastFinal = toks;
-        this.lastFinalAt = this.now();
-        this.utteranceStable = [];
-        this.boundaries++;
-      }
     } else if (s.phase === 'singing') {
       const t = this.tracker;
       if (!t) return;
-      let toks = tokens(text);
-      const echo = this.echoOf(toks);
-      if (echo === 'same') return;
-      if (echo === 'longer') { this.skipPrefix = this.lastFinal.length; this.lastFinal = []; }
-      const fresh = toks.slice(this.skipPrefix);
-      if (fresh.length || isFinal) t.update(fresh, isFinal);
-      if (isFinal) { this.lastFinal = toks; this.lastFinalAt = this.now(); this.skipPrefix = 0; }
+      const toks = tokens(text);
+      const was = this.prev;
+      const rel = this.relate(toks, isFinal);
+      if (rel === 'new') t.endUtterance();
+      // Same words again are skipped, except to settle the last word once the phrase is final.
+      if (rel !== 'same' || (isFinal && was && !was.final)) t.update(toks, isFinal, false);
       if (t.line !== s.line) this.set({ line: t.line });
       if (this.showHeardLive) this.set({ heard: text });
     }
@@ -249,22 +267,51 @@ export class Engine {
           this.setListeningStatus('Busy for a moment. Keep singing, or try Title mode.');
           return;
         }
-        if (r.waiting) { // several songs fit so far: wait for more words rather than guess
-          this.setListeningStatus('Keep singing...');
-          return;
-        }
-        for (const song of r.songs) {
+        const usable = r.songs.filter((song) => {
           skip.add(song.key);
-          if (!mostlyLatin(song.lines)) continue; // e.g. an Arabic version
-          if (worship && !song.worship && !isWorship(song.artist, song.lines)) continue;
-          const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery, song.source === 'library');
+          return mostlyLatin(song.lines) && (!worship || song.worship || isWorship(song.artist, song.lines));
+        });
+        const library = usable.filter((song) => song.source === 'library');
+
+        // Library songs: score each one forgivingly against what was heard and take the clear winner.
+        if (library.length) {
+          const ranked = library
+            .map((song) => { const lines = song.lines.map(tokens); return { song, lines, r: LyricTracker.rank(lines, words) }; })
+            .filter((x) => x.r)
+            .sort((a, b) => b.r.ratio - a.r.ratio || b.r.score - a.r.score);
+          if (ranked.length) {
+            const top = ranked[0];
+            // Other recordings of the same song fit equally well and don't count as rivals.
+            const rival = ranked.find((x) => titleKey(x.song) !== titleKey(top.song));
+            const gap = rival ? top.r.ratio - rival.r.ratio : 1;
+            // Commit when one song clearly fits best and enough was heard to be sure of it. A short
+            // phrase needs a bigger lead; with a long phrase a good fit is enough. Otherwise wait.
+            const enough = words.length >= 4 && top.r.ratio >= 0.6;
+            const clear = gap >= (words.length >= 7 ? 0.15 : 0.3);
+            if (enough && (clear || (words.length >= 10 && top.r.ratio >= 0.7))) {
+              const t = LyricTracker.create(top.lines, words, consumedAtQuery);
+              if (t) {
+                if (this.boundaries !== boundariesAtQuery) t.endUtterance();
+                this.present(top.song, t);
+                return;
+              }
+            } else { // two different songs fit about equally: wait for more words rather than guess
+              this.setListeningStatus('Keep singing...');
+              return;
+            }
+          }
+        }
+
+        // Songs found by Genius.
+        for (const song of usable.filter((x) => x.source !== 'library')) {
+          const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery);
           if (!t) continue;
           if (this.boundaries !== boundariesAtQuery) t.endUtterance();
           this.present(song, t);
           return;
         }
-        // Library suggestions didn't survive checking: ask the wider search once.
-        if (r.songs.length && r.songs.every((s) => s.source === 'library') && !skipLibrary) { skipLibrary = true; continue; }
+        // The library had candidates but none fitted: ask the wider search once.
+        if (r.songs.length && r.songs.every((x) => x.source === 'library') && !skipLibrary) { skipLibrary = true; continue; }
         break;
       }
       this.setListeningStatus(this.worship ? 'No worship song matched yet. Keep singing.' : 'Not sure yet. Keep singing.');

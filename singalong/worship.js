@@ -26,7 +26,7 @@ const artistExact = new Set(['passion', 'hope', 'life.church worship']);
 
 const strongWords = new Set([
   'jesus', 'christ', 'savior', 'saviour', 'hallelujah', 'alleluia', 'hosanna',
-  'redeemer', 'almighty', 'emmanuel', 'messiah', 'amen',
+  'redeemer', 'almighty', 'emmanuel', 'messiah', 'amen', 'yahweh', 'jehovah', 'adonai', 'elohim',
 ]);
 
 const weakWords = new Set([
@@ -50,5 +50,5 @@ export function isWorship(artist, lines) {
     if (strongWords.has(w)) strong++;
     if (weakWords.has(w)) weak++;
   }
-  return strong >= MIN_STRONG_WORDS || (strong >= 1 && weak >= 2) || weak >= 4;
+  return strong >= MIN_STRONG_WORDS || (strong >= 1 && weak >= 1) || weak >= 4;
 }

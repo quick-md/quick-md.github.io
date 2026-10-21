@@ -17,7 +17,7 @@
 </head>
 <body>
 <h1>Library pre-fill</h1>
-<p class="muted">Fills the shared song library ahead of time so your first singers get instant results. One line per song: <code>Title</code> or <code>Title - Artist</code>. Lyrics are fetched by the Worker; nothing is stored in this page. Delete or edit lines freely.</p>
+<p class="muted">Fills the shared song library ahead of time so your first singers get instant results. One line per song: <code>Title</code> or <code>Title by Artist</code> (<code>Title - Artist</code> also works). Lyrics are fetched by the Worker; nothing is stored in this page. Delete or edit lines freely.</p>
 <label>Admin key (the ADMIN_KEY secret you set on the Worker)</label>
 <input id="key" type="password" autocomplete="off">
 <label>Songs</label>
@@ -91,7 +91,9 @@ go.onclick = async () => {
   go.disabled = true; log.textContent = `Adding ${lines.length} songs...`;
   let added = 0, had = 0, missed = 0;
   for (const [i, line] of lines.entries()) {
-    const [title, ...rest] = line.split(' - ');
+    const m = line.match(/^(.*?)(?:\s+by\s+|\s+-\s+|\s*\|\s*)(.+)$/i);
+    const title = m ? m[1] : line;
+    const rest = m ? [m[2]] : [];
     try {
       const res = await fetch(WORKER_URL + '/admin/add', { method: 'POST', headers: { 'X-Admin-Key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), artist: rest.join(' - ').trim() }) });
       if (res.status === 403) { say('Wrong admin key. Stopping.'); break; }
