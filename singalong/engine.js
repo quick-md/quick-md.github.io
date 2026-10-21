@@ -21,6 +21,25 @@ export function titleMatches(songTitle, heard) {
   return want.every((w) => heard.some((h) => similar(w, h)));
 }
 
+const startsWith = (a, b) => b.length <= a.length && b.every((w, i) => a[i] === w);
+const DUP_MS = 900; // an "extended" repeat of a just-finished phrase this soon is the same phrase, not a new one
+
+/** Join phrases, dropping echoes: some phones report "king", "king of", "king of kings" as separate results. */
+export function mergeParts(parts) {
+  const out = [];
+  for (const p of parts.filter(Boolean)) {
+    const last = out[out.length - 1];
+    if (last) {
+      const a = tokens(last);
+      const b = tokens(p);
+      if (startsWith(b, a)) { out[out.length - 1] = p; continue; }
+      if (startsWith(a, b)) continue;
+    }
+    out.push(p);
+  }
+  return out;
+}
+
 export class Engine {
   /**
    * @param {{api:{find,title,close}, makeSpeech:(h)=>{start,stop}, vocab?:()=>any, store?:{get,set}, now?:()=>number}} deps
@@ -44,6 +63,10 @@ export class Engine {
     this.lookupBusy = false;
     this.epoch = 0; // bumps whenever the listening session is reset, so stale lookups are dropped
     this.dismissTimer = null;
+    this.now = deps.now || (() => Date.now());
+    this.lastFinal = []; // words of the phrase that just finished, to spot echoes of it
+    this.lastFinalAt = 0;
+    this.skipPrefix = 0; // while following: leading words of this result that were already counted
     this.titleDelay = deps.titleDelayMs ?? TITLE_PAUSE_MS;
     this.titleTimer = null;
     this.titleFinals = []; // finished phrases of the title being spoken
@@ -113,7 +136,18 @@ export class Engine {
   // ---- hearing ----
   repair(words) { const v = this.getVocab(); return v ? v.snapAll(words) : words; }
 
+  /** Is this result an echo of the phrase that just finished? 'same' (nothing new), 'longer' (same start, more words) or null. */
+  echoOf(toks) {
+    const f = this.lastFinal;
+    if (!f.length || this.now() - this.lastFinalAt > DUP_MS) return null;
+    if (startsWith(f, toks)) return 'same';
+    if (startsWith(toks, f)) return 'longer';
+    return null;
+  }
+
   onBlank() {
+    this.lastFinal = [];
+    this.skipPrefix = 0;
     if (this.titleCurrent) { this.titleFinals.push(this.titleCurrent); this.titleCurrent = ''; }
     this.boundaries++;
     this.utteranceStable = [];
@@ -127,7 +161,7 @@ export class Engine {
       if (this.mode === 'title') {
         // Wait for a real pause, and join phrases, so "king of kings ... bethel" is one title.
         if (isFinal) { this.titleFinals.push(text); this.titleCurrent = ''; } else this.titleCurrent = text;
-        const said = [...this.titleFinals, this.titleCurrent].filter(Boolean).join(' ');
+        const said = mergeParts([...this.titleFinals, this.titleCurrent]).join(' ');
         this.set({ heard: said });
         clearTimeout(this.titleTimer);
         this.titleTimer = setTimeout(() => {
@@ -137,8 +171,14 @@ export class Engine {
         }, this.titleDelay);
         return;
       }
-      this.set({ heard: text });
       const toks = this.repair(tokens(text));
+      const echo = this.echoOf(toks);
+      if (echo === 'same') return; // the phone repeating what it just reported
+      if (echo === 'longer') { // the same phrase, now with more words: replace it, don't add it twice
+        this.committed.splice(Math.max(0, this.committed.length - this.lastFinal.length));
+        this.lastFinal = [];
+      }
+      this.set({ heard: text });
       const v = this.getVocab();
       const lastIsWord = toks.length && v ? v.isWord(toks[toks.length - 1]) : false;
       this.utteranceStable = isFinal || lastIsWord ? toks : toks.slice(0, -1);
@@ -146,13 +186,21 @@ export class Engine {
       if (isFinal) {
         this.committed.push(...toks);
         while (this.committed.length > 16) this.committed.shift();
+        this.lastFinal = toks;
+        this.lastFinalAt = this.now();
         this.utteranceStable = [];
         this.boundaries++;
       }
     } else if (s.phase === 'singing') {
       const t = this.tracker;
       if (!t) return;
-      t.update(tokens(text), isFinal);
+      let toks = tokens(text);
+      const echo = this.echoOf(toks);
+      if (echo === 'same') return;
+      if (echo === 'longer') { this.skipPrefix = this.lastFinal.length; this.lastFinal = []; }
+      const fresh = toks.slice(this.skipPrefix);
+      if (fresh.length || isFinal) t.update(fresh, isFinal);
+      if (isFinal) { this.lastFinal = toks; this.lastFinalAt = this.now(); this.skipPrefix = 0; }
       if (t.line !== s.line) this.set({ line: t.line });
       if (this.showHeardLive) this.set({ heard: text });
     }
