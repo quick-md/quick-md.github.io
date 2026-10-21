@@ -159,12 +159,12 @@ export class LyricTracker {
    * extra word costs a little, little words ("the", "and") count for less than distinctive ones, and
    * the last one or two words may be wrong. Returns { score, ratio } (ratio 0..1) or null.
    */
-  static rank(lines, heard) {
+  static rank(lines, heard, span = INIT_WINDOW) {
     const t = new LyricTracker(lines);
     if (t.words.length === 0) return null;
     let best = null;
     for (let drop = 0; drop <= 2; drop++) {
-      const window = heard.slice(0, heard.length - drop).slice(-INIT_WINDOW);
+      const window = heard.slice(0, heard.length - drop).slice(-span);
       if (window.length < MIN_INIT_WORDS) continue;
       const total = window.reduce((a, w) => a + weight(w), 0);
       const anchor = window[window.length - 1];

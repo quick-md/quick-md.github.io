@@ -74,6 +74,9 @@ export class Segmenter {
     this.tickN = 0;
   }
 
+  /** For the session log: what the cutter thought was going on. */
+  diag() { return { loud: this.loud, floor: +this.floor.toFixed(3), quiet: +(this.quietest ?? 0).toFixed(3) }; }
+
   threshold() { return Math.max(0.008, this.floor * 3); }
 
   push(chunk) {
@@ -98,6 +101,7 @@ export class Segmenter {
     if (this.recent.length > 150) this.recent.shift();
     if (this.recent.length === 150 && ++this.tickN % 10 === 0) {
       const quietest = [...this.recent].sort((a, b) => a - b)[15]; // the 10th percentile
+      this.quietest = quietest;
       if (this.loud ? quietest < 0.025 : quietest > 0.05) this.loud = quietest > 0.05;
     }
     const voice = this.loud || rms > this.threshold();

@@ -22,6 +22,8 @@ export function titleMatches(songTitle, heard) {
 }
 
 const startsWith = (a, b) => b.length <= a.length && b.every((w, i) => a[i] === w);
+const LONG_SPAN = 32; // words of recent singing compared against a song, not only the last line
+const LONG_FIT = 0.6; // how well a song must fit those
 const WIDE_GAP_MS = 5000; // at most one wider (Genius) search this often
 const SAME_PHRASE_MS = 3000; // a finished phrase this long ago is over: more words after it start a new phrase
 const REPEAT_MS = 1200; // the very same words again after this long are the singer repeating the line
@@ -206,7 +208,7 @@ export class Engine {
     this.utteranceStable = [];
     this.tracker?.endUtterance();
   }
-  trimCommitted() { while (this.committed.length > 16) this.committed.shift(); }
+  trimCommitted() { while (this.committed.length > 40) this.committed.shift(); }
 
   onHeard(text, isFinal) {
     if (!text) return this.onBlank();
@@ -254,7 +256,8 @@ export class Engine {
 
   // ---- lyrics mode ----
   async maybeLookup() {
-    const words = [...this.committed, ...this.utteranceStable].slice(-12);
+    const words32 = [...this.committed, ...this.utteranceStable].slice(-LONG_SPAN);
+    const words = words32.slice(-12);
     if (words.length < 3 || this.lookupBusy) return;
     if (new Set(distinctive(words)).size < 2) return; // "oh my oh my" says nothing about which song
     const tail = words.slice(-8);
@@ -272,6 +275,9 @@ export class Engine {
       if (vocab) distinct = distinct.filter((w) => vocab.isWord(w));
       const skip = new Set(this.rejected);
       let skipLibrary = false;
+      let waiting = false;
+      let held = null; // a library song that fits well enough, waiting to see if the wider search finds better
+      const canWide = (r) => r.songs.length > 0 && r.songs.every((x) => x.source === 'library') && !skipLibrary && words.length >= 6 && this.now() - this.lastWide >= WIDE_GAP_MS;
       for (let pass = 0; pass < 2; pass++) {
         const r = await this.api.find({
           q: searchable.join(' '),
@@ -281,6 +287,7 @@ export class Engine {
           skipLibrary,
         });
         if (epoch !== this.epoch) return;
+        this.note('lookup', { pass, wide: skipLibrary, q: searchable.join(' '), alt: distinct.join(' '), found: r.songs.map((x) => `${x.title} (${x.source})`), cooling: !!r.cooling });
         if (r.cooling) {
           this.setListeningStatus('Busy for a moment. Keep singing, or try Title mode.');
           return;
@@ -290,66 +297,75 @@ export class Engine {
           return mostlyLatin(song.lines) && (!worship || song.worship || isWorship(song.artist, song.lines));
         });
         const library = usable.filter((song) => song.source === 'library');
+        // How well does each song fit the last line (r) and the last several lines together (long)?
+        // A song that only shares one refrain with what was sung fits the first but not the second.
+        const judge = (song) => {
+          const lines = song.lines.map(tokens);
+          return { song, lines, r: LyricTracker.rank(lines, words), long: LyricTracker.rank(lines, words32, LONG_SPAN) };
+        };
+        const longOf = (x) => (x.long ? x.long.ratio : 0);
 
         // Library songs: score each one forgivingly against what was heard and take the clear winner.
         if (library.length) {
-          const ranked = library
-            .map((song) => { const lines = song.lines.map(tokens); return { song, lines, r: LyricTracker.rank(lines, words) }; })
-            .filter((x) => x.r)
-            .sort((a, b) => b.r.ratio - a.r.ratio || b.r.score - a.r.score);
+          const ranked = library.map(judge).filter((x) => x.r)
+            .sort((a, b) => (b.r.ratio + longOf(b)) - (a.r.ratio + longOf(a)) || b.r.score - a.r.score);
           if (ranked.length) {
-            this.debugRank?.({ words, ranked: ranked.map((x) => ({ title: x.song.title, ...x.r })) });
+            this.debugRank?.({ words, ranked: ranked.map((x) => ({ title: x.song.title, ...x.r, long: longOf(x) })) });
             const top = ranked[0];
             // Other recordings of the same song fit equally well and don't count as rivals.
             const rival = ranked.find((x) => titleKey(x.song) !== titleKey(top.song));
             const gap = rival ? top.r.ratio - rival.r.ratio : 1;
-            // Commit when one song clearly fits best and enough was heard to be sure of it. A short
-            // phrase needs a bigger lead; with a long phrase a good fit is enough. Otherwise wait.
-            // "Enough" means real evidence: several distinctive words in order, not a couple of words
-            // that happen to appear in many songs ("I'm coming back to ...").
-            const enough = words.length >= 6 && top.r.score >= 5 && top.r.ratio >= 0.6;
+            // Commit when one song clearly fits best and enough was heard to be sure of it. "Enough" is
+            // real evidence: several distinctive words in order, over the last few lines and not just
+            // a couple of words that happen to appear in many songs ("I'm coming back to ...").
+            const enough = words.length >= 6 && top.r.score >= 5 && top.r.ratio >= 0.6 && longOf(top) >= LONG_FIT;
             const clear = gap >= (words.length >= 9 ? 0.15 : 0.3);
-            const plausible = top.r.ratio >= 0.5 && top.r.score >= 3; // worth waiting for more words
             if (enough && (clear || (words.length >= 10 && top.r.ratio >= 0.7))) {
-              const t = LyricTracker.create(top.lines, words, consumedAtQuery);
-              if (t) {
-                if (this.boundaries !== boundariesAtQuery) t.endUtterance();
-                this.present(top.song, t);
-                return;
-              }
-            } else if (plausible) { // a song fits, or two fit about equally: wait for more words rather than guess
-              this.setListeningStatus('Keep singing...');
-              return;
+              // A very good fit is taken at once. A moderate one is held back while the wider search
+              // is asked, because a song that only shares a refrain with the real one fits like this.
+              const strong = top.r.ratio >= 0.75 && longOf(top) >= 0.75;
+              if (strong || skipLibrary) { if (this.openSong(top, words, consumedAtQuery, boundariesAtQuery)) return; }
+              else if (canWide(r)) held = top;
+              else waiting = true;
+            } else if (top.r.ratio >= 0.5 && top.r.score >= 3) {
+              waiting = true; // something fits a little: say so, but still look wider (below)
             }
-            // Nothing in the library fits well: the song is probably not in it, so ask the wider search.
           }
         }
 
-        // Songs found by Genius.
-        for (const song of usable.filter((x) => x.source !== 'library')) {
-          const lines = song.lines.map(tokens);
-          const fit = LyricTracker.rank(lines, words);
-          if (!fit || fit.ratio < 0.55 || fit.score < 3) continue;
-          const t = LyricTracker.create(lines, words, consumedAtQuery);
-          if (!t) continue;
-          if (this.boundaries !== boundariesAtQuery) t.endUtterance();
-          this.present(song, t);
-          return;
+        // Songs found by Genius: the best fit wins, unless a library song held back fits better.
+        const wide = usable.filter((x) => x.source !== 'library').map(judge)
+          .filter((x) => x.r && x.r.ratio >= 0.55 && x.r.score >= 3 && longOf(x) >= LONG_FIT)
+          .sort((a, b) => (b.r.ratio + longOf(b)) - (a.r.ratio + longOf(a)));
+        if (wide.length && (!held || wide[0].r.ratio + longOf(wide[0]) > held.r.ratio + longOf(held) + 0.1)) {
+          if (this.openSong(wide[0], words, consumedAtQuery, boundariesAtQuery)) return;
         }
-        // The library had candidates but none fitted: ask the wider search once.
-        if (r.songs.length && r.songs.every((x) => x.source === 'library') && !skipLibrary && words.length >= 6 && this.now() - this.lastWide >= WIDE_GAP_MS) {
+        if (held && skipLibrary) { // the wider search found nothing better
+          if (this.openSong(held, words, consumedAtQuery, boundariesAtQuery)) return;
+        }
+        // The library had candidates but none fitted well: the song is probably not in it. Ask the wider search.
+        if (canWide(r)) {
           this.lastWide = this.now(); // the wider search is slower and shared: not on every new word
           skipLibrary = true;
           continue;
         }
         break;
       }
-      this.setListeningStatus(this.worship ? 'No worship song matched yet. Keep singing.' : 'Not sure yet. Keep singing.');
+      this.setListeningStatus(waiting ? 'Keep singing...' : this.worship ? 'No worship song matched yet. Keep singing.' : 'Not sure yet. Keep singing.');
     } catch (e) {
       if (epoch === this.epoch) this.setListeningStatus(e.message || 'Lookup failed. Retrying as you sing.');
     } finally {
       if (epoch === this.epoch) this.lookupBusy = false;
     }
+  }
+
+  /** Start following a judged song. False if it can't be followed from these words. */
+  openSong(x, words, consumed, boundariesAtQuery) {
+    const t = LyricTracker.create(x.lines, words, consumed);
+    if (!t) return false;
+    if (this.boundaries !== boundariesAtQuery) t.endUtterance();
+    this.present(x.song, t);
+    return true;
   }
 
   setListeningStatus(status) {
