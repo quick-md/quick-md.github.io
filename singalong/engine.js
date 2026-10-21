@@ -4,6 +4,7 @@ import { LyricTracker, similar } from './tracker.js';
 import { isWorship } from './worship.js';
 
 export const DISMISS_WINDOW_MS = 6000;
+export const TITLE_PAUSE_MS = 1500; // how long you must be quiet before a spoken title is searched
 export const HINT = {
   lyrics: "Sing a line or two and I'll find the song.",
   title: 'Say the song title. Add the artist if you like.',
@@ -43,6 +44,10 @@ export class Engine {
     this.lookupBusy = false;
     this.epoch = 0; // bumps whenever the listening session is reset, so stale lookups are dropped
     this.dismissTimer = null;
+    this.titleDelay = deps.titleDelayMs ?? TITLE_PAUSE_MS;
+    this.titleTimer = null;
+    this.titleFinals = []; // finished phrases of the title being spoken
+    this.titleCurrent = ''; // the phrase still in progress
   }
 
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -62,7 +67,8 @@ export class Engine {
     });
     this.speech.start();
   }
-  stop() { this.speech?.stop(); this.speech = null; clearTimeout(this.dismissTimer); this.epoch++; }
+  stop() { this.speech?.stop(); this.speech = null; clearTimeout(this.dismissTimer); this.clearTitle(); this.epoch++; }
+  clearTitle() { clearTimeout(this.titleTimer); this.titleFinals = []; this.titleCurrent = ''; }
   fatal(message) { this.stop(); this.set({ phase: 'error', error: message }); }
   retry() { this.stop(); this.set({ phase: 'idle' }); this.start(); }
 
@@ -89,6 +95,7 @@ export class Engine {
   listenForAnother() { this.backToListening(this.hint); }
   backToListening(status) {
     clearTimeout(this.dismissTimer);
+    this.clearTitle();
     this.epoch++;
     this.tracker = null;
     this.committed = [];
@@ -107,6 +114,7 @@ export class Engine {
   repair(words) { const v = this.getVocab(); return v ? v.snapAll(words) : words; }
 
   onBlank() {
+    if (this.titleCurrent) { this.titleFinals.push(this.titleCurrent); this.titleCurrent = ''; }
     this.boundaries++;
     this.utteranceStable = [];
     this.tracker?.endUtterance();
@@ -116,11 +124,20 @@ export class Engine {
     if (!text) return this.onBlank();
     const s = this.state;
     if (s.phase === 'listening') {
-      this.set({ heard: text });
       if (this.mode === 'title') {
-        if (isFinal) this.searchTitle(text);
+        // Wait for a real pause, and join phrases, so "king of kings ... bethel" is one title.
+        if (isFinal) { this.titleFinals.push(text); this.titleCurrent = ''; } else this.titleCurrent = text;
+        const said = [...this.titleFinals, this.titleCurrent].filter(Boolean).join(' ');
+        this.set({ heard: said });
+        clearTimeout(this.titleTimer);
+        this.titleTimer = setTimeout(() => {
+          this.titleFinals = [];
+          this.titleCurrent = '';
+          if (this.state.phase === 'listening') this.searchTitle(said);
+        }, this.titleDelay);
         return;
       }
+      this.set({ heard: text });
       const toks = this.repair(tokens(text));
       const v = this.getVocab();
       const lastIsWord = toks.length && v ? v.isWord(toks[toks.length - 1]) : false;
