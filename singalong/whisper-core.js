@@ -64,11 +64,14 @@ export class Segmenter {
     this.minVoice = Math.round(minVoiceMs / frameMs);
     this.pending = new Float32Array(0);
     this.floor = 0.004;
+    this.recent = []; // loudness of the last ~3 s, to tell steady music (never quiet) from a voice (has quiet gaps)
+    this.loud = false; // steady loud sound: "is something louder than usual" means nothing, so keep everything
     this.ring = [];
     this.frames = [];
     this.inPhrase = false;
     this.voiced = 0;
     this.silent = 0;
+    this.tickN = 0;
   }
 
   threshold() { return Math.max(0.008, this.floor * 3); }
@@ -91,7 +94,13 @@ export class Segmenter {
     const rms = Math.sqrt(sum / f.length);
     // The background level falls quickly to quiet moments and creeps up slowly.
     this.floor += (rms - this.floor) * (rms < this.floor ? 0.2 : 0.002);
-    const voice = rms > this.threshold();
+    this.recent.push(rms);
+    if (this.recent.length > 150) this.recent.shift();
+    if (this.recent.length === 150 && ++this.tickN % 10 === 0) {
+      const quietest = [...this.recent].sort((a, b) => a - b)[15]; // the 10th percentile
+      if (this.loud ? quietest < 0.025 : quietest > 0.05) this.loud = quietest > 0.05;
+    }
+    const voice = this.loud || rms > this.threshold();
     if (!this.inPhrase) {
       if (voice) {
         this.inPhrase = true;
