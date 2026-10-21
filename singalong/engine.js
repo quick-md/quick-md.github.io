@@ -80,10 +80,22 @@ export class Engine {
     this.now = deps.now || (() => Date.now());
     this.prev = null; // the previous result {toks, final, at}: how a new result relates to it decides everything
     this.phrase = []; // words of the phrase being sung right now
+    this.recording = false; // when on, every result and every highlight move is kept so a session can be replayed
+    this.log = [];
+    this.logStart = 0;
     this.titleDelay = deps.titleDelayMs ?? TITLE_PAUSE_MS;
     this.titleTimer = null;
     this.titleFinals = []; // finished phrases of the title being spoken
     this.titleCurrent = ''; // the phrase still in progress
+  }
+
+  // ---- session log (for debugging with real phones) ----
+  startRecording() { this.log = []; this.logStart = this.now(); this.recording = true; this.note('start', { mode: this.mode, worship: this.worship }); }
+  stopRecording() { this.recording = false; }
+  note(k, data = {}) { if (this.recording) this.log.push({ t: this.now() - this.logStart, k, ...data }); }
+  /** Everything needed to replay the session: the results as heard, the song and where the highlight went. */
+  exportLog(extra = {}) {
+    return { app: 'singalong-session-log', version: 1, savedAt: new Date().toISOString(), ...extra, events: this.log };
   }
 
   subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -182,6 +194,7 @@ export class Engine {
   }
 
   onBlank() {
+    this.note('blank');
     if (this.phrase.length) { this.committed.push(...this.phrase); this.trimCommitted(); }
     this.phrase = [];
     this.prev = null;
@@ -194,6 +207,7 @@ export class Engine {
 
   onHeard(text, isFinal) {
     if (!text) return this.onBlank();
+    this.note('heard', { text, final: !!isFinal, phase: this.state.phase });
     const s = this.state;
     if (s.phase === 'listening') {
       if (this.mode === 'title') {
@@ -230,7 +244,7 @@ export class Engine {
       if (rel === 'new') t.endUtterance();
       // Same words again are skipped, except to settle the last word once the phrase is final.
       if (rel !== 'same' || (isFinal && was && !was.final)) t.update(toks, isFinal, false);
-      if (t.line !== s.line) this.set({ line: t.line });
+      if (t.line !== s.line) { this.note('line', { line: t.line, pos: t.pos }); this.set({ line: t.line }); }
       if (this.showHeardLive) this.set({ heard: text });
     }
   }
@@ -323,6 +337,7 @@ export class Engine {
   }
 
   setListeningStatus(status) {
+    this.note('status', { status });
     if (this.state.phase === 'listening') this.set({ status, isHint: false });
   }
 
@@ -373,6 +388,7 @@ export class Engine {
   present(song, tracker) {
     this.tracker = tracker;
     this.lookupBusy = false;
+    this.note('song', { key: song.key, title: song.title, artist: song.artist, source: song.source, line: tracker.line, lines: song.lines });
     clearTimeout(this.dismissTimer);
     this.set({ phase: 'singing', lyrics: song, line: tracker.line, canDismiss: true, options: null });
     this.dismissTimer = setTimeout(() => {

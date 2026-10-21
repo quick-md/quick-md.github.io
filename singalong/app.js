@@ -126,6 +126,26 @@ function body(s) {
   }
 }
 
+function logNote() {
+  if (engine.recording) return `Recording (${engine.log.length} events). Sing a song or two, then switch this off and tap Save.`;
+  return engine.log.length ? `${engine.log.length} events recorded. Tap Save to send them. Text only, no audio.` : 'Keeps what was heard and where the highlight went, as text only (no audio), so problems can be replayed.';
+}
+
+async function saveLog() {
+  const data = engine.exportLog({ engine: settings.engine, info: engine.state.info || '', ua: navigator.userAgent });
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const file = new File([blob], `singalong-log-${Date.now()}.json`, { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'SingAlong session log' }); return; }
+  } catch { /* cancelled or unsupported: fall back to a download */ }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
 function settingsPanel() {
   if (!settingsOpen) return '';
   const seg = (name, items, cur) => `<div class="seg">${items.map(([v, label]) => `<button data-act="${name}" data-v="${v}" aria-pressed="${cur === v}">${label}</button>`).join('')}</div>`;
@@ -139,6 +159,9 @@ function settingsPanel() {
       <div class="note" style="margin-top:8px">${settings.engine === 'whisper' ? 'Better over a guitar or music. First use downloads a model.' : 'Quick and light, but struggles over background music.'}${engine.state.info ? `<br>${esc(engine.state.info)}` : ''}</div></div>
     <div class="toggle"><div><b>Worship songs only</b><div class="note">Only suggests worship songs, in both Lyrics and Title mode.</div></div>
       <button data-act="worship" aria-pressed="${engine.worship}" aria-label="Worship songs only"></button></div>
+    <div class="toggle"><div><b>Record session log</b><div class="note">${logNote()}</div></div>
+      <button data-act="record" aria-pressed="${engine.recording}" aria-label="Record session log"></button></div>
+    ${engine.log.length && !engine.recording ? '<button class="ghost" data-act="saveLog">Save log to send to Claude</button>' : ''}
     <div class="toggle"><div><b>Show what I sing</b><div class="note">Shows the words as they’re heard, and the “sing a line or two” prompt.</div></div>
       <button data-act="showHeard" aria-pressed="${settings.showHeard}" aria-label="Show heard words"></button></div>
   </div></div>`;
@@ -198,6 +221,8 @@ app.addEventListener('click', (e) => {
     case 'engine': if (v === 'whisper' && !whisperSupported()) break; settings.engine = v; store.set('engine', v); engine.restartSpeech(); break;
     case 'useBrowser': settings.engine = 'browser'; store.set('engine', 'browser'); keepAwake(); engine.retry(); break;
     case 'size': settings.size = v; store.set('size', v); applyLook(); break;
+    case 'record': if (engine.recording) engine.stopRecording(); else engine.startRecording(); break;
+    case 'saveLog': saveLog(); return;
     case 'showHeard': settings.showHeard = !settings.showHeard; engine.showHeardLive = settings.showHeard; store.set('showHeard', settings.showHeard ? '1' : '0'); break;
   }
   lastLyricsKey = null; // a settings or button change: redraw fully
