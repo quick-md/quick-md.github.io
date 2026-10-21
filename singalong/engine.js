@@ -20,7 +20,7 @@ export class Engine {
     this.store = deps.store || { get: () => null, set: () => {} };
     this.listeners = new Set();
     this.mode = this.store.get('mode') === 'title' ? 'title' : 'lyrics';
-    this.worship = this.store.get('worship') === '1';
+    this.worship = this.store.get('worship') !== '0'; // on unless switched off
     this.state = { phase: 'idle', heard: '', status: '', isHint: true };
     this.speech = null;
     this.rejected = new Set();

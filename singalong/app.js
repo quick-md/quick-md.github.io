@@ -25,7 +25,7 @@ const settings = {
   theme: store.get('theme') || 'auto',
   accent: ACCENTS[store.get('accent')] ? store.get('accent') : 'violet',
   size: SIZES[store.get('size')] ? store.get('size') : 'M',
-  showHeard: store.get('showHeard') !== '0',
+  showHeard: store.get('showHeard') === '1', // off unless switched on
 };
 let settingsOpen = false;
 let vocab = null;
@@ -77,8 +77,7 @@ function topBar(s) {
       <button data-act="mode" data-v="title" aria-pressed="${!lyricsMode}">Title</button>
     </div>
     <div style="width:48px"></div>
-  </div>
-  <div class="chips"><button class="chip" data-act="worship" aria-pressed="${engine.worship}"><i></i>Worship songs only</button></div>`;
+  </div>`;
 }
 
 function body(s) {
@@ -94,7 +93,7 @@ function body(s) {
     case 'listening':
       return `<main><div class="center">
         <div class="bars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></div>
-        <p class="${s.isHint ? 'muted' : ''}" style="margin:0;font-size:21px">${esc(s.status)}</p>
+        ${s.isHint && !settings.showHeard ? '' : `<p class="${s.isHint ? 'muted' : ''}" style="margin:0;font-size:21px">${esc(s.status)}</p>`}
         ${settings.showHeard ? `<div class="heard">${esc(s.heard)}</div>` : ''}
       </div></main>`;
     case 'suggesting':
@@ -133,6 +132,8 @@ function settingsPanel() {
     <div><label class="t">Colour</label><div class="swatches">${Object.entries(ACCENTS).map(([k, v]) =>
       `<button class="sw" data-act="accent" data-v="${k}" aria-label="${v[0]}" aria-pressed="${settings.accent === k}" style="background:linear-gradient(135deg,${v[3]},${v[4]})"></button>`).join('')}</div></div>
     <div><label class="t">Lyric size</label>${seg('size', [['S', 'S'], ['M', 'M'], ['L', 'L'], ['XL', 'XL']], settings.size)}</div>
+    <div class="toggle"><div><b>Worship songs only</b><div class="note">Only suggests worship songs, in both Lyrics and Title mode.</div></div>
+      <button data-act="worship" aria-pressed="${engine.worship}" aria-label="Worship songs only"></button></div>
     <div class="toggle"><div><b>Show what I sing</b><div class="note">Shows the words as they’re heard, and the “sing a line or two” prompt.</div></div>
       <button data-act="showHeard" aria-pressed="${settings.showHeard}" aria-label="Show heard words"></button></div>
   </div></div>`;
