@@ -1,5 +1,5 @@
 // The app's brain: hearing -> identifying -> following. No DOM, so it can be tested.
-import { tokens, distinctive } from './matcher.js';
+import { tokens, distinctive, mostlyLatin } from './matcher.js';
 import { LyricTracker, similar } from './tracker.js';
 import { isWorship } from './worship.js';
 
@@ -175,6 +175,7 @@ export class Engine {
         }
         for (const song of r.songs) {
           skip.add(song.key);
+          if (!mostlyLatin(song.lines)) continue; // e.g. an Arabic version
           if (worship && !isWorship(song.artist, song.lines)) continue;
           const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery);
           if (!t) continue;
@@ -214,7 +215,8 @@ export class Engine {
       if (r.cooling) { this.setListeningStatus('Busy for a moment. Say the title again.'); return; }
       // Worship mode keeps worship songs, and also the song you actually named.
       const said = [...new Set([...raw, ...fixed])];
-      const ok = (song) => !worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said);
+      const ok = (song) => mostlyLatin(song.lines) &&
+        (!worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said));
       for (const song of r.songs) {
         if (!ok(song)) continue;
         const t = LyricTracker.start(song.lines.map(tokens));

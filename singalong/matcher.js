@@ -21,3 +21,12 @@ const filler = new Set([
 export function distinctive(words) {
   return words.filter((w) => w.length >= 3 && !filler.has(w));
 }
+
+/** True if the lyrics are written mostly in the Latin alphabet (so not Arabic, Cyrillic, Chinese...). */
+export function mostlyLatin(lines) {
+  const text = lines.join(' ');
+  const letters = text.match(/\p{L}/gu);
+  if (!letters || letters.length === 0) return false;
+  const latin = text.match(/\p{Script=Latin}/gu);
+  return (latin ? latin.length : 0) / letters.length >= 0.85;
+}
