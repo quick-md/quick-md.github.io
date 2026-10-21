@@ -2,6 +2,7 @@
 import { Engine } from './engine.js';
 import * as api from './api.js';
 import { SpeechLoop, speechSupported } from './speech.js';
+import { WhisperLoop, whisperSupported } from './whisper.js';
 import { vocabularyFromText } from './vocab.js';
 
 const ACCENTS = {
@@ -26,13 +27,14 @@ const settings = {
   accent: ACCENTS[store.get('accent')] ? store.get('accent') : 'violet',
   size: SIZES[store.get('size')] ? store.get('size') : 'M',
   showHeard: store.get('showHeard') === '1', // off unless switched on
+  engine: store.get('engine') === 'browser' || !whisperSupported() ? 'browser' : 'whisper',
 };
 let settingsOpen = false;
 let vocab = null;
 
 const engine = new Engine({
   api,
-  makeSpeech: (h) => new SpeechLoop(h),
+  makeSpeech: (h) => (settings.engine === 'whisper' ? new WhisperLoop(h) : new SpeechLoop(h)),
   vocab: () => vocab,
   store,
 });
@@ -93,6 +95,7 @@ function body(s) {
     case 'listening':
       return `<main><div class="center">
         <div class="bars" aria-hidden="true"><b></b><b></b><b></b><b></b><b></b></div>
+        ${s.modelProgress != null ? `<p style="margin:0;font-size:20px">Getting the speech model ready… ${Math.round(s.modelProgress * 100)}%</p><p class="note" style="margin:0">One-time download. After this it starts in a few seconds.</p>` : ''}
         ${s.isHint && !settings.showHeard ? '' : `<p class="${s.isHint ? 'muted' : ''}" style="margin:0;font-size:21px">${esc(s.status)}</p>`}
         ${settings.showHeard ? `<div class="heard">${esc(s.heard)}</div>` : ''}
       </div></main>`;
@@ -117,7 +120,7 @@ function body(s) {
       </main>`;
     }
     case 'error':
-      return `<main><div class="center"><h1>Hmm.</h1><p class="err">${esc(s.error)}</p><button class="big" data-act="retry">Try again</button></div></main>`;
+      return `<main><div class="center"><h1>Hmm.</h1><p class="err">${esc(s.error)}</p><button class="big" data-act="retry">Try again</button>${settings.engine === 'whisper' && speechSupported() ? '<button class="ghost" data-act="useBrowser">Use browser speech instead</button>' : ''}</div></main>`;
     default:
       return '';
   }
@@ -132,6 +135,8 @@ function settingsPanel() {
     <div><label class="t">Colour</label><div class="swatches">${Object.entries(ACCENTS).map(([k, v]) =>
       `<button class="sw" data-act="accent" data-v="${k}" aria-label="${v[0]}" aria-pressed="${settings.accent === k}" style="background:linear-gradient(135deg,${v[3]},${v[4]})"></button>`).join('')}</div></div>
     <div><label class="t">Lyric size</label>${seg('size', [['S', 'S'], ['M', 'M'], ['L', 'L'], ['XL', 'XL']], settings.size)}</div>
+    <div><label class="t">Speech engine</label>${seg('engine', [['whisper', 'Whisper'], ['browser', 'Browser']], settings.engine)}
+      <div class="note" style="margin-top:8px">${settings.engine === 'whisper' ? 'Better over a guitar or music. First use downloads a model.' : 'Quick and light, but struggles over background music.'}${engine.state.info ? `<br>${esc(engine.state.info)}` : ''}</div></div>
     <div class="toggle"><div><b>Worship songs only</b><div class="note">Only suggests worship songs, in both Lyrics and Title mode.</div></div>
       <button data-act="worship" aria-pressed="${engine.worship}" aria-label="Worship songs only"></button></div>
     <div class="toggle"><div><b>Show what I sing</b><div class="note">Shows the words as they’re heard, and the “sing a line or two” prompt.</div></div>
@@ -190,6 +195,8 @@ app.addEventListener('click', (e) => {
     case 'closeSettings': settingsOpen = false; render(); return;
     case 'theme': settings.theme = v; store.set('theme', v); applyLook(); break;
     case 'accent': settings.accent = v; store.set('accent', v); applyLook(); break;
+    case 'engine': if (v === 'whisper' && !whisperSupported()) break; settings.engine = v; store.set('engine', v); engine.restartSpeech(); break;
+    case 'useBrowser': settings.engine = 'browser'; store.set('engine', 'browser'); keepAwake(); engine.retry(); break;
     case 'size': settings.size = v; store.set('size', v); applyLook(); break;
     case 'showHeard': settings.showHeard = !settings.showHeard; engine.showHeardLive = settings.showHeard; store.set('showHeard', settings.showHeard ? '1' : '0'); break;
   }

@@ -87,8 +87,19 @@ export class Engine {
       onHeard: (t, f) => this.onHeard(t, f),
       onBoundary: () => this.onBlank(),
       onFatal: (m) => this.fatal(m),
+      onProgress: (p) => this.set({ modelProgress: p }),
+      onReady: () => this.set({ modelProgress: null }),
+      onInfo: (info) => { this.state = { ...this.state, info }; }, // shown in Settings; no redraw needed
     });
     this.speech.start();
+  }
+  /** Switch speech engine (Whisper / browser) while running: stop the old one and start the new. */
+  restartSpeech() {
+    if (!this.speech) return;
+    this.speech.stop();
+    this.speech = null;
+    this.set({ modelProgress: null, info: '' });
+    this.start();
   }
   stop() { this.speech?.stop(); this.speech = null; clearTimeout(this.dismissTimer); this.clearTitle(); this.epoch++; }
   clearTitle() { clearTimeout(this.titleTimer); this.titleFinals = []; this.titleCurrent = ''; }
