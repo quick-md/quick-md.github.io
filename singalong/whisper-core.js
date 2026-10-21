@@ -21,8 +21,25 @@ export function resampleTo16k(input, inRate) {
 const dropped = new Set(['you', 'thank you', 'thanks for watching', 'bye', 'okay', 'so']);
 
 /** Whisper invents "[MUSIC]", "(guitar)", "you" and "thanks for watching" over noise: remove those. */
+/** Cuts a run of the same 1-4 words repeated many times ("oh my oh my oh my ...") down to two. */
+export function collapseRepeats(text) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const norm = words.map((w) => w.toLowerCase().replace(/[^\p{L}']/gu, ''));
+  const out = [];
+  for (let i = 0; i < words.length;) {
+    let cut = false;
+    for (let n = 1; n <= 4 && !cut; n++) {
+      let reps = 1;
+      while (i + (reps + 1) * n <= words.length && norm.slice(i, i + n).join(' ') === norm.slice(i + reps * n, i + (reps + 1) * n).join(' ')) reps++;
+      if (reps >= 4) { out.push(...words.slice(i, i + 2 * n)); i += reps * n; cut = true; }
+    }
+    if (!cut) out.push(words[i++]);
+  }
+  return out.join(' ');
+}
+
 export function cleanTranscript(text) {
-  let t = String(text || '')
+  let t = collapseRepeats(String(text || ''))
     .replace(/\[[^\]]*\]|\([^)]*\)|\*[^*]*\*|[♪♫♬]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

@@ -180,6 +180,9 @@ export class WhisperLoop {
     try {
       const r = await this.transcriber.run(audio);
       text = cleanTranscript(r.text);
+      let sum = 0; let peak = 0;
+      for (let i = 0; i < audio.length; i++) { const a = Math.abs(audio[i]); sum += a * a; if (a > peak) peak = a; }
+      this.h.onDecode?.({ ms: r.ms, secs: +(audio.length / 16000).toFixed(1), rms: +Math.sqrt(sum / audio.length).toFixed(4), peak: +peak.toFixed(3), raw: String(r.text).slice(0, 200), final: finalize });
       this.h.onInfo?.(`${this.transcriber.info} · ${(r.ms / 1000).toFixed(1)} s per phrase`);
     } catch {
       // One phrase failed to decode; carry on with the next.

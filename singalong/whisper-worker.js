@@ -40,7 +40,14 @@ async function init() {
 }
 
 async function run(audio) {
-  const out = await asr(audio);
+  // Whisper can get stuck repeating one phrase when it can't make out words (music, a strummed chord).
+  // Cap how much it may write for this much audio, and forbid repeating the same four words.
+  const secs = audio.length / 16000;
+  const out = await asr(audio, {
+    max_new_tokens: Math.min(80, Math.ceil(10 + secs * 6)),
+    no_repeat_ngram_size: 4,
+    return_timestamps: false,
+  });
   return Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
 }
 
