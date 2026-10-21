@@ -107,12 +107,16 @@ export class LyricTracker {
     this.pending = null;
     this.certain = true;
     this.relocated = false;
+    this.anchored = true; // false for a song opened from the top until the singer is really following it
+    this.matches = 0;
   }
 
   /** Tracker that starts at the top of the song (picked by title). */
   static start(lines) {
     const t = new LyricTracker(lines);
-    return t.words.length === 0 ? null : t;
+    if (t.words.length === 0) return null;
+    t.anchored = false;
+    return t;
   }
 
   /**
@@ -219,6 +223,7 @@ export class LyricTracker {
   }
 
   onMatch(w) {
+    if (++this.matches >= 3) this.anchored = true;
     this.note(w, true);
     this.advanceDisplay();
     this.checkAlignment();
@@ -294,10 +299,17 @@ export class LyricTracker {
       return;
     }
     const best = Math.max(...cands.map((c) => c.score));
-    const top = cands.filter((c) => c.score === best);
+    let top = cands.filter((c) => c.score === best);
+    let tie = false;
     if (top.length !== 1) {
-      this.pending = null;
-      return;
+      if (this.anchored) {
+        this.pending = null;
+        return;
+      }
+      // Opened from the top but the singer is somewhere else, and the words fit several places
+      // (a repeated chorus): take the earliest, and stay unsure so it can only lag, not jump.
+      top = [top.reduce((a, b) => (b.q < a.q ? b : a))];
+      tie = true;
     }
     const q = top[0].q;
     if (q + 1 === this.pos) return;
@@ -313,7 +325,8 @@ export class LyricTracker {
       this.line = this.repeatsRecentLine(l, this.pos - this.lineStart[l]) ? Math.max(0, l - 1) : l;
       this.recent = [];
       this.pending = null;
-      this.certain = true;
+      this.certain = !tie;
+      this.anchored = true;
       this.relocated = true;
     }
   }
