@@ -173,10 +173,14 @@ export class Engine {
           this.setListeningStatus('Busy for a moment. Keep singing, or try Title mode.');
           return;
         }
+        if (r.waiting) { // several songs fit so far: wait for more words rather than guess
+          this.setListeningStatus('Keep singing...');
+          return;
+        }
         for (const song of r.songs) {
           skip.add(song.key);
           if (!mostlyLatin(song.lines)) continue; // e.g. an Arabic version
-          if (worship && !isWorship(song.artist, song.lines)) continue;
+          if (worship && !song.worship && !isWorship(song.artist, song.lines)) continue;
           const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery, song.source === 'library');
           if (!t) continue;
           if (this.boundaries !== boundariesAtQuery) t.endUtterance();
@@ -216,7 +220,7 @@ export class Engine {
       // Worship mode keeps worship songs, and also the song you actually named.
       const said = [...new Set([...raw, ...fixed])];
       const ok = (song) => mostlyLatin(song.lines) &&
-        (!worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said));
+        (!worship || song.worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said));
       for (const song of r.songs) {
         if (!ok(song)) continue;
         const t = LyricTracker.start(song.lines.map(tokens));
