@@ -177,7 +177,7 @@ export class Engine {
           skip.add(song.key);
           if (!mostlyLatin(song.lines)) continue; // e.g. an Arabic version
           if (worship && !isWorship(song.artist, song.lines)) continue;
-          const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery);
+          const t = LyricTracker.create(song.lines.map(tokens), words, consumedAtQuery, song.source === 'library');
           if (!t) continue;
           if (this.boundaries !== boundariesAtQuery) t.endUtterance();
           this.present(song, t);

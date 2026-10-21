@@ -119,13 +119,15 @@ export class LyricTracker {
    * First lock-on from the words heard so far. Null if they don't convincingly match anywhere.
    * Several equal matches: the EARLIEST wins and the tracker starts not certain.
    */
-  static create(lines, heard, consumedInUtterance = heard.length) {
+  static create(lines, heard, consumedInUtterance = heard.length, strict = false) {
     const t = new LyricTracker(lines);
     if (t.words.length === 0) return null;
     for (const attempt of [heard, heard.slice(0, -1)]) {
       const window = attempt.slice(-INIT_WINDOW);
       if (window.length < MIN_INIT_WORDS) continue;
-      const need = window.length <= 3 ? 2 : Math.max(3, Math.ceil(window.length * 0.6));
+      let need = window.length <= 3 ? 2 : Math.max(3, Math.ceil(window.length * 0.6));
+      // Strict (songs from the shared library, where many songs share words): most words must fit.
+      if (strict) need = window.length <= 3 ? window.length : Math.max(4, Math.ceil(window.length * 0.75));
       const cands = t.candidates(window, need);
       if (cands.length === 0) continue;
       const best = Math.max(...cands.map((c) => c.score));
