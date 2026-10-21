@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>SingAlong library</title>
+<style>
+  body { font: 17px/1.4 system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px 16px 60px; background: #15113A; color: #F4F2FF; }
+  input, textarea, button { font: inherit; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #5a4fa0; background: #0A0919; color: inherit; margin: 6px 0 14px; }
+  textarea { height: 280px; font-size: 15px; }
+  button { background: linear-gradient(90deg, #9B8CFF, #FF6FB1); color: #140F36; font-weight: 700; border: 0; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  pre { background: #0A0919; padding: 12px; border-radius: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; font-size: 14px; }
+  .muted { color: #A8A2CC; font-size: 15px; }
+</style>
+</head>
+<body>
+<h1>Library pre-fill</h1>
+<p class="muted">Fills the shared song library ahead of time so your first singers get instant results. One line per song: <code>Title</code> or <code>Title - Artist</code>. Lyrics are fetched by the Worker; nothing is stored in this page. Delete or edit lines freely.</p>
+<label>Admin key (the ADMIN_KEY secret you set on the Worker)</label>
+<input id="key" type="password" autocomplete="off">
+<label>Songs</label>
+<textarea id="list" spellcheck="false"></textarea>
+<button id="go">Add to library</button>
+<pre id="log">Ready.</pre>
+<script type="module">
+import { WORKER_URL } from './config.js';
+const DEFAULTS = `Amazing Grace (My Chains Are Gone) - Chris Tomlin
+How Great Is Our God - Chris Tomlin
+Good Good Father - Chris Tomlin
+Oceans (Where Feet May Fail) - Hillsong United
+What a Beautiful Name - Hillsong Worship
+Who You Say I Am - Hillsong Worship
+Mighty to Save - Hillsong Worship
+Cornerstone - Hillsong Worship
+This Is Amazing Grace - Phil Wickham
+Living Hope - Phil Wickham
+10,000 Reasons - Matt Redman
+Build My Life - Housefires
+Goodness of God - Bethel Music
+Raise a Hallelujah - Bethel Music
+Reckless Love - Cory Asbury
+Graves Into Gardens - Elevation Worship
+O Come to the Altar - Elevation Worship
+Do It Again - Elevation Worship
+Million Little Miracles - Elevation Worship
+Promises - Maverick City Music
+Jireh - Elevation Worship
+Way Maker - Sinach
+Great Are You Lord - All Sons & Daughters
+Holy Spirit - Francesca Battistelli
+Here I Am to Worship - Tim Hughes
+In Christ Alone - Keith & Kristyn Getty
+Shout to the Lord - Darlene Zschech
+Lord I Need You - Matt Maher
+Blessed Be Your Name - Matt Redman
+Forever - Kari Jobe
+Revelation Song - Kari Jobe
+The Blessing - Kari Jobe
+Great Things - Phil Wickham
+Battle Belongs - Phil Wickham
+Praise - Elevation Worship
+Rattle! - Elevation Worship
+King of Kings - Hillsong Worship
+Christ Is Enough - Hillsong Worship
+Tremble - Mosaic MSC
+Gratitude - Brandon Lake
+Hard Fought Hallelujah - Brandon Lake
+Firm Foundation (He Won't) - Cody Carnes
+Run to the Father - Cody Carnes
+Nothing Else - Cody Carnes
+Holy Forever - Chris Tomlin
+Death Was Arrested - Northridge Worship
+Man of Sorrows - Hillsong Worship
+Is He Worthy - Andrew Peterson
+Come Thou Fount - Sovereign Grace Music
+Abide With Me
+It Is Well With My Soul
+Great Is Thy Faithfulness
+Be Thou My Vision
+How Deep the Father's Love for Us
+Holy Holy Holy`;
+const list = document.getElementById('list'); list.value = DEFAULTS;
+const log = document.getElementById('log'); const go = document.getElementById('go');
+const say = (t) => { log.textContent += '\n' + t; log.scrollTop = log.scrollHeight; };
+go.onclick = async () => {
+  const key = document.getElementById('key').value.trim();
+  if (!key) return say('Enter the admin key first.');
+  const lines = list.value.split('\n').map((s) => s.trim()).filter(Boolean);
+  go.disabled = true; log.textContent = `Adding ${lines.length} songs...`;
+  let added = 0, had = 0, missed = 0;
+  for (const [i, line] of lines.entries()) {
+    const [title, ...rest] = line.split(' - ');
+    try {
+      const res = await fetch(WORKER_URL + '/admin/add', { method: 'POST', headers: { 'X-Admin-Key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title.trim(), artist: rest.join(' - ').trim() }) });
+      if (res.status === 403) { say('Wrong admin key. Stopping.'); break; }
+      const r = await res.json();
+      if (r.ok && r.stored) { added++; say(`${i + 1}. added: ${r.title}`); }
+      else if (r.ok) { had++; say(`${i + 1}. already there: ${r.title}`); }
+      else { missed++; say(`${i + 1}. skipped (${r.reason || 'error'}): ${line}`); }
+    } catch (e) { missed++; say(`${i + 1}. failed: ${line}`); }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  say(`Done. Added ${added}, already there ${had}, skipped ${missed}.`);
+  go.disabled = false;
+};
+</script>
+</body>
+</html>
