@@ -13,6 +13,7 @@ const MARGIN = 2;
 const INIT_WINDOW = 8;
 const PHRASE_WINDOW = 10;
 const MIN_INIT_WORDS = 3;
+const LOST_REACH = 45; // words ahead a lost tracker may jump to
 
 // ---- word similarity --------------------------------------------------------------------
 
@@ -116,6 +117,7 @@ export class LyricTracker {
     this.matches = 0;
     this.run = 0; // words matched one after another, allowing a single miss
     this.missStreak = 0;
+    this.lost = 0; // results in a row that moved nothing: the words are too noisy to follow word by word
   }
 
   /** Tracker that starts at the top of the song (picked by title). */
@@ -152,6 +154,27 @@ export class LyricTracker {
       return t;
     }
     return null;
+  }
+
+  /**
+   * Start following a song that is already known to be the right one, from noisy words. Goes to the best
+   * place the recent words fit, however poorly, and if they fit nowhere starts from the top.
+   */
+  static createLoose(lines, heard, consumed = heard.length) {
+    const t = new LyricTracker(lines);
+    if (t.words.length === 0) return null;
+    const window = heard.slice(-10);
+    const cands = window.length >= 3 ? t.candidates(window, 2.5, true) : [];
+    if (cands.length === 0) return LyricTracker.start(lines);
+    const best = Math.max(...cands.map((c) => c.score));
+    const tops = cands.filter((c) => c.score >= best - 0.01);
+    const q = Math.min(...tops.map((c) => c.q));
+    t.pos = q + 1;
+    t.line = t.lineOf[q];
+    t.consumed = consumed;
+    t.certain = false;
+    t.anchored = false;
+    return t;
   }
 
   /**
@@ -208,7 +231,8 @@ export class LyricTracker {
         progressed = true;
       }
     }
-    if (this.phraseJump(tokens)) progressed = true;
+    this.lost = progressed ? 0 : this.lost + 1;
+    if (this.phraseJump(tokens)) { progressed = true; this.lost = 0; }
     if (boundary) this.newUtterance = true;
     if (this.relocated) {
       progressed = true;
@@ -223,17 +247,21 @@ export class LyricTracker {
    * several places (a repeated chorus), take the nearest one ahead, never one far behind.
    */
   phraseJump(tokens) {
-    if (tokens.length < 5) return false;
+    if (tokens.length < 4) return false;
+    // When the last few results moved nothing, the singer is probably somewhere else and the words are
+    // noisy (over a guitar): accept a weaker fit, but only a place ahead of where we are.
+    const lost = this.lost >= 3;
     let best = null;
     for (const attempt of [tokens, tokens.slice(0, -1)]) {
       const window = attempt.slice(-PHRASE_WINDOW);
-      if (window.length < 5) continue;
+      if (window.length < (lost ? 4 : 5)) continue;
       const total = window.reduce((a, w) => a + weight(w), 0);
-      const need = Math.max(3.2, 0.65 * total);
-      const cands = this.candidates(window, need, true);
+      const need = lost ? Math.max(2.6, 0.45 * total) : Math.max(3.2, 0.65 * total);
+      let cands = this.candidates(window, need, true);
+      if (lost) cands = cands.filter((c) => c.q + 1 > this.pos && c.q + 1 <= this.pos + LOST_REACH);
       if (cands.length === 0) continue;
       const top = Math.max(...cands.map((c) => c.score));
-      if (this.scoreHere(window, true) + 1 >= top) continue; // already where these words are, or no clear gain
+      if (this.scoreHere(window, true) + (lost ? 0.5 : 1) >= top) continue; // already where these words are, or no clear gain
       const ratio = top / total;
       if (!best || ratio > best.ratio) best = { ratio, cands: cands.filter((c) => c.score >= top - 0.01) };
     }

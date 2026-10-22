@@ -22,6 +22,8 @@ export function titleMatches(songTitle, heard) {
 }
 
 const startsWith = (a, b) => b.length <= a.length && b.every((w, i) => a[i] === w);
+const VOTE_WINDOW = 8; // lookups remembered
+const VOTES_NEEDED = 5; // lookups in which one song must have been the best fit
 const LONG_SPAN = 32; // words of recent singing compared against a song, not only the last line
 const LONG_FIT = 0.6; // how well a song must fit those
 const WIDE_GAP_MS = 5000; // at most one wider (Genius) search this often
@@ -84,6 +86,7 @@ export class Engine {
     this.prev = null; // the previous result {toks, final, at}: how a new result relates to it decides everything
     this.phrase = []; // words of the phrase being sung right now
     this.lastWide = -1e9;
+    this.votes = []; // which library song was the best fit in each recent lookup: noisy singing still points the same way
     this.recording = false; // when on, every result and every highlight move is kept so a session can be replayed
     this.log = [];
     this.logStart = 0;
@@ -166,6 +169,7 @@ export class Engine {
     this.utteranceStable = [];
     this.prev = null;
     this.phrase = [];
+    this.votes = [];
     this.lastQueryTail = [];
     this.lookupBusy = false;
     this.set({ phase: 'listening', heard: '', status, isHint: true, options: null, lyrics: null });
@@ -276,6 +280,9 @@ export class Engine {
       const skip = new Set(this.rejected);
       let skipLibrary = false;
       let waiting = false;
+      let votedKey = null;
+      let votedDone = false;
+      let heldLoose = false;
       let held = null; // a library song that fits well enough, waiting to see if the wider search finds better
       const canWide = (r) => r.songs.length > 0 && r.songs.every((x) => x.source === 'library') && !skipLibrary && words.length >= 6 && this.now() - this.lastWide >= WIDE_GAP_MS;
       for (let pass = 0; pass < 2; pass++) {
@@ -312,6 +319,18 @@ export class Engine {
           if (ranked.length) {
             this.debugRank?.({ words, ranked: ranked.map((x) => ({ title: x.song.title, ...x.r, long: longOf(x) })) });
             const top = ranked[0];
+            // Noisy singing (over a guitar) never fits one lookup well, but it keeps pointing at the same song.
+            if (!skipLibrary) {
+              this.votes.push(top.r.ratio >= 0.4 && top.r.score >= 1.8 ? { k: titleKey(top.song), ratio: top.r.ratio } : null);
+              if (this.votes.length > VOTE_WINDOW) this.votes.shift();
+              const tally = new Map();
+              for (const v of this.votes) if (v) tally.set(v.k, [...(tally.get(v.k) || []), v.ratio]);
+              const [lead, rival] = [...tally.entries()].sort((a, b) => b[1].length - a[1].length);
+              if (lead && lead[1].length >= VOTES_NEEDED && (!rival || rival[1].length <= lead[1].length / 2)
+                && lead[1].reduce((a, b) => a + b, 0) / lead[1].length >= 0.5) {
+                votedKey = lead[0];
+              }
+            }
             // Other recordings of the same song fit equally well and don't count as rivals.
             const rival = ranked.find((x) => titleKey(x.song) !== titleKey(top.song));
             const gap = rival ? top.r.ratio - rival.r.ratio : 1;
@@ -330,6 +349,13 @@ export class Engine {
             } else if (top.r.ratio >= 0.5 && top.r.score >= 3) {
               waiting = true; // something fits a little: say so, but still look wider (below)
             }
+            if (votedKey && !held) {
+              const v = ranked.find((x) => titleKey(x.song) === votedKey);
+              if (v && !votedDone) { // held like any moderate fit: the wider search gets a chance to find better first
+                if (skipLibrary || !canWide(r)) { /* no wider search to wait for */ }
+                held = v; heldLoose = true;
+              }
+            }
           }
         }
 
@@ -341,7 +367,7 @@ export class Engine {
           if (this.openSong(wide[0], words, consumedAtQuery, boundariesAtQuery)) return;
         }
         if (held && skipLibrary) { // the wider search found nothing better
-          if (this.openSong(held, words, consumedAtQuery, boundariesAtQuery)) return;
+          if (this.openSong(held, words, consumedAtQuery, boundariesAtQuery, heldLoose)) return;
         }
         // The library had candidates but none fitted well: the song is probably not in it. Ask the wider search.
         if (canWide(r)) {
@@ -360,8 +386,8 @@ export class Engine {
   }
 
   /** Start following a judged song. False if it can't be followed from these words. */
-  openSong(x, words, consumed, boundariesAtQuery) {
-    const t = LyricTracker.create(x.lines, words, consumed);
+  openSong(x, words, consumed, boundariesAtQuery, loose = false) {
+    const t = LyricTracker.create(x.lines, words, consumed) || (loose ? LyricTracker.createLoose(x.lines, words, consumed) : null);
     if (!t) return false;
     if (this.boundaries !== boundariesAtQuery) t.endUtterance();
     this.present(x.song, t);
@@ -420,6 +446,7 @@ export class Engine {
   present(song, tracker) {
     this.tracker = tracker;
     this.lookupBusy = false;
+    this.votes = [];
     this.note('song', { key: song.key, title: song.title, artist: song.artist, source: song.source, line: tracker.line, lines: song.lines });
     clearTimeout(this.dismissTimer);
     this.set({ phase: 'singing', lyrics: song, line: tracker.line, canDismiss: true, options: null });
