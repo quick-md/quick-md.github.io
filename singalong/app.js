@@ -30,6 +30,7 @@ const settings = {
   engine: store.get('engine') === 'browser' || !whisperSupported() ? 'browser' : 'whisper',
   music: store.get('music') === '1', // phone auto-gain off + rumble filter, for playing along
   model: store.get('model') === 'small' ? 'small' : 'base',
+  keepAudio: store.get('keepAudio') === '1', // keep the audio with the session log (off by default)
   lyricAware: store.get('lyricAware') === '1', // experimental: score the audio against the song's next lines
 };
 let settingsOpen = false;
@@ -138,15 +139,20 @@ async function saveLog() {
   const data = engine.exportLog({ engine: settings.engine, info: engine.state.info || '', ua: navigator.userAgent });
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const file = new File([blob], `singalong-log-${Date.now()}.json`, { type: 'application/json' });
+  const wav = engine.exportAudio();
+  const files = [file];
+  if (wav) files.push(new File([wav], file.name.replace(/\.json$/, '.wav'), { type: 'audio/wav' }));
   try {
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'SingAlong session log' }); return; }
+    if (navigator.canShare && navigator.canShare({ files })) { await navigator.share({ files, title: 'SingAlong session log' }); return; }
   } catch { /* cancelled or unsupported: fall back to a download */ }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = file.name;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  for (const f of files) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(f);
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
 }
 
 function settingsPanel() {
@@ -171,7 +177,9 @@ function settingsPanel() {
       <button data-act="worship" aria-pressed="${engine.worship}" aria-label="Worship songs only"></button></div>
     <div class="toggle"><div><b>Record session log</b><div class="note">${logNote()}</div></div>
       <button data-act="record" aria-pressed="${engine.recording}" aria-label="Record session log"></button></div>
-    ${engine.log.length && !engine.recording ? '<button class="ghost" data-act="saveLog">Save log to send to Claude</button>' : ''}
+    <div class="toggle"><div><b>Keep audio with the log</b><div class="note">${settings.keepAudio ? 'On: the next recording also keeps up to 5 minutes of sound from the mic, for testing other speech engines. Only saved if you tap Save, and only sent if you send it.' : 'Off. Turn on before recording if you want to send the sound too.'}</div></div>
+      <button data-act="keepAudio" aria-pressed="${settings.keepAudio}" aria-label="Keep audio with the log"></button></div>
+    ${engine.log.length && !engine.recording ? `<button class="ghost" data-act="saveLog">Save log${engine.audioSeconds ? ` and ${engine.audioSeconds} s of audio` : ''} to send to Claude</button>` : ''}
     <div class="toggle"><div><b>Show what I sing</b><div class="note">Shows the words as they’re heard, and the “sing a line or two” prompt.</div></div>
       <button data-act="showHeard" aria-pressed="${settings.showHeard}" aria-label="Show heard words"></button></div>
   </div></div>`;
@@ -230,6 +238,7 @@ app.addEventListener('click', (e) => {
     case 'accent': settings.accent = v; store.set('accent', v); applyLook(); break;
     case 'engine': if (v === 'whisper' && !whisperSupported()) break; settings.engine = v; store.set('engine', v); engine.restartSpeech(); break;
     case 'useBrowser': settings.engine = 'browser'; store.set('engine', 'browser'); keepAwake(); engine.retry(); break;
+    case 'keepAudio': settings.keepAudio = !settings.keepAudio; store.set('keepAudio', settings.keepAudio ? '1' : '0'); break;
     case 'music': settings.music = !settings.music; store.set('music', settings.music ? '1' : '0'); engine.restartSpeech(); break;
     case 'model': settings.model = v; store.set('model', v); engine.restartSpeech(); break;
     case 'lyricAware': settings.lyricAware = !settings.lyricAware; store.set('lyricAware', settings.lyricAware ? '1' : '0'); engine.restartSpeech(); break;

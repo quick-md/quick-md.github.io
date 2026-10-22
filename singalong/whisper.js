@@ -172,7 +172,7 @@ export class WhisperLoop {
     this.active = true;
     try {
       // The microphone first: browsers only allow it from a tap, and the model can take a while.
-      await this.mic.start((chunk) => { if (this.ready) this.seg.push(chunk); });
+      await this.mic.start((chunk) => { this.h.onAudio?.(chunk); if (this.ready) this.seg.push(chunk); });
       this.transcriber.onProgress = (p) => this.active && this.h.onProgress?.(p);
       await this.transcriber.load();
       if (!this.active) return;

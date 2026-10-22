@@ -1,6 +1,7 @@
 // The app's brain: hearing -> identifying -> following. No DOM, so it can be tested.
 import { tokens, distinctive, mostlyLatin } from './matcher.js';
 import { buildCandidates, decide } from './lyric-score.js';
+import { toInt16, encodeWav } from './whisper-core.js';
 import { LyricTracker, similar } from './tracker.js';
 import { isWorship } from './worship.js';
 
@@ -60,6 +61,8 @@ export function mergeParts(parts) {
   return out;
 }
 
+const AUDIO_MAX = 16000 * 300; // five minutes
+
 export class Engine {
   /**
    * @param {{api:{find,title,close}, makeSpeech:(h)=>{start,stop}, vocab?:()=>any, store?:{get,set}, now?:()=>number}} deps
@@ -70,6 +73,9 @@ export class Engine {
     this.getVocab = deps.vocab || (() => null);
     this.store = deps.store || { get: () => null, set: () => {} };
     this.listeners = new Set();
+    this.audioOn = false;
+    this.audioChunks = [];
+    this.audioSamples = 0;
     this.mode = this.store.get('mode') === 'title' ? 'title' : 'lyrics';
     this.worship = this.store.get('worship') !== '0'; // on unless switched off
     this.state = { phase: 'idle', heard: '', status: '', isHint: true };
@@ -103,9 +109,21 @@ export class Engine {
     this.logStart = this.now();
     this.recording = true;
     const on = (k) => this.store.get(k) === '1';
+    this.audioChunks = [];
+    this.audioSamples = 0;
+    this.audioOn = on('keepAudio');
     this.note('start', { mode: this.mode, worship: this.worship, music: on('music'), lyricAware: on('lyricAware'), model: this.store.get('model') || 'base', mic: this.micInfo || null });
   }
-  stopRecording() { this.recording = false; }
+  stopRecording() { this.recording = false; this.audioOn = false; }
+
+  // ---- audio kept with the log, only when asked, so other speech engines can be tried on real recordings ----
+  tapAudio(chunk) {
+    if (!this.audioOn || this.audioSamples >= AUDIO_MAX) return;
+    this.audioChunks.push(toInt16(chunk));
+    this.audioSamples += chunk.length;
+  }
+  get audioSeconds() { return Math.round(this.audioSamples / 16000); }
+  exportAudio() { return this.audioSamples ? encodeWav(this.audioChunks) : null; }
   note(k, data = {}) { if (this.recording) this.log.push({ t: this.now() - this.logStart, k, ...data }); }
   /** Everything needed to replay the session: the results as heard, the song and where the highlight went. */
   exportLog(extra = {}) {
@@ -129,6 +147,7 @@ export class Engine {
       onProgress: (p) => this.set({ modelProgress: p }),
       onReady: () => this.set({ modelProgress: null }),
       onDecode: (d) => this.note('decode', d),
+      onAudio: (c) => this.tapAudio(c),
       onMic: (m) => { this.micInfo = m || null; this.note('mic', m || {}); },
       getCandidates: () => this.scoreCandidates(),
       onScore: (r) => this.onScore(r),
