@@ -277,6 +277,15 @@ export class Engine {
       const searchable = vocab ? tail.filter((w) => vocab.isWord(w)) : tail;
       let distinct = distinctive(words);
       if (vocab) distinct = distinct.filter((w) => vocab.isWord(w));
+      // Library search: the 12 newest distinctive words from the last 32. Over a noisy guitar only some
+      // words are right, so more words give the right song more chances to stand out (the 8-word tail
+      // ranked the true song 9th, 3rd or nowhere on a real log; this ranks it first).
+      let spread = [...new Set(distinctive(words32))];
+      if (vocab) spread = spread.filter((w) => vocab.isWord(w));
+      spread = spread.slice(-12);
+      // Genius search: the newest whole phrase as heard, which reads like a real lyric line.
+      let phraseWords = this.utteranceStable.length >= 4 ? this.utteranceStable.slice(-10) : [];
+      if (vocab) phraseWords = phraseWords.filter((w) => vocab.isWord(w));
       const skip = new Set(this.rejected);
       let skipLibrary = false;
       let waiting = false;
@@ -286,15 +295,18 @@ export class Engine {
       let held = null; // a library song that fits well enough, waiting to see if the wider search finds better
       const canWide = (r) => r.songs.length > 0 && r.songs.every((x) => x.source === 'library') && !skipLibrary && words.length >= 6 && this.now() - this.lastWide >= WIDE_GAP_MS;
       for (let pass = 0; pass < 2; pass++) {
-        const r = await this.api.find({
-          q: searchable.join(' '),
-          alt: distinct.length >= 2 && distinct.join(' ') !== searchable.join(' ') ? distinct.join(' ') : '',
-          n: worship ? 6 : 4,
-          exclude: [...skip],
-          skipLibrary,
-        });
+        const tailQ = searchable.join(' ');
+        let q = tailQ;
+        let alt = distinct.length >= 2 && distinct.join(' ') !== tailQ ? distinct.join(' ') : '';
+        if (skipLibrary) {
+          if (phraseWords.length >= 4 && phraseWords.join(' ') !== tailQ) alt = phraseWords.join(' ');
+        } else if (spread.length >= 4) {
+          q = spread.join(' ');
+          alt = tailQ !== q ? tailQ : '';
+        }
+        const r = await this.api.find({ q, alt, n: worship ? 6 : 4, exclude: [...skip], skipLibrary });
         if (epoch !== this.epoch) return;
-        this.note('lookup', { pass, wide: skipLibrary, q: searchable.join(' '), alt: distinct.join(' '), found: r.songs.map((x) => `${x.title} (${x.source})`), cooling: !!r.cooling });
+        this.note('lookup', { pass, wide: skipLibrary, q, alt, found: r.songs.map((x) => `${x.title} (${x.source})`), cooling: !!r.cooling });
         if (r.cooling) {
           this.setListeningStatus('Busy for a moment. Keep singing, or try Title mode.');
           return;
@@ -381,7 +393,12 @@ export class Engine {
     } catch (e) {
       if (epoch === this.epoch) this.setListeningStatus(e.message || 'Lookup failed. Retrying as you sing.');
     } finally {
-      if (epoch === this.epoch) this.lookupBusy = false;
+      if (epoch === this.epoch) {
+        this.lookupBusy = false;
+        // Words may have moved on (a phrase got finalised) while this lookup was out: look again now
+        // rather than waiting for the next phrase, so a clean final phrase is never skipped.
+        if (this.state.phase === 'listening') setTimeout(() => { if (epoch === this.epoch && this.state.phase === 'listening') this.maybeLookup(); }, 0);
+      }
     }
   }
 
