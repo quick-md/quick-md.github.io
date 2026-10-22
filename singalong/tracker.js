@@ -204,6 +204,22 @@ export class LyricTracker {
   }
 
   /** Call when the speech engine ends an utterance. */
+  /** Put the singer at the end of line `l`, so the next words are expected from the line after. False if that line has no words. */
+  placeAtEndOfLine(l) {
+    if (!(l >= 0 && l < this.lineLen.length) || this.lineLen[l] === 0) return false;
+    this.pos = this.lineStart[l] + this.lineLen[l];
+    this.line = l;
+    this.recent = [];
+    this.pending = null;
+    this.certain = true;
+    this.anchored = true;
+    this.relocated = true;
+    this.run = 0;
+    this.missStreak = 0;
+    this.lost = 0;
+    return true;
+  }
+
   endUtterance() {
     this.newUtterance = true;
   }

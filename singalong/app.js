@@ -28,13 +28,16 @@ const settings = {
   size: SIZES[store.get('size')] ? store.get('size') : 'M',
   showHeard: store.get('showHeard') === '1', // off unless switched on
   engine: store.get('engine') === 'browser' || !whisperSupported() ? 'browser' : 'whisper',
+  music: store.get('music') === '1', // phone auto-gain off + rumble filter, for playing along
+  model: store.get('model') === 'small' ? 'small' : 'base',
+  lyricAware: store.get('lyricAware') === '1', // experimental: score the audio against the song's next lines
 };
 let settingsOpen = false;
 let vocab = null;
 
 const engine = new Engine({
   api,
-  makeSpeech: (h) => (settings.engine === 'whisper' ? new WhisperLoop(h) : new SpeechLoop(h)),
+  makeSpeech: (h) => (settings.engine === 'whisper' ? new WhisperLoop(h, { opts: { music: settings.music, model: settings.model, lyricAware: settings.lyricAware } }) : new SpeechLoop(h)),
   vocab: () => vocab,
   store,
 });
@@ -157,6 +160,13 @@ function settingsPanel() {
     <div><label class="t">Lyric size</label>${seg('size', [['S', 'S'], ['M', 'M'], ['L', 'L'], ['XL', 'XL']], settings.size)}</div>
     <div><label class="t">Speech engine</label>${seg('engine', [['whisper', 'Whisper'], ['browser', 'Browser']], settings.engine)}
       <div class="note" style="margin-top:8px">${settings.engine === 'whisper' ? 'Better over a guitar or music. First use downloads a model.' : 'Quick and light, but struggles over background music.'}${engine.state.info ? `<br>${esc(engine.state.info)}` : ''}</div></div>
+    ${settings.engine === 'whisper' ? `
+    <div class="toggle"><div><b>Music mode</b><div class="note">For playing along: turns off the phone’s auto-gain (it pushes a loud guitar into distortion) and cuts low rumble. Restarts listening.</div></div>
+      <button data-act="music" aria-pressed="${settings.music}" aria-label="Music mode"></button></div>
+    <div><label class="t">Whisper model</label>${seg('model', [['base', 'Base'], ['small', 'Small']], settings.model)}
+      <div class="note" style="margin-top:8px">Small hears more over music but is slower, and the first use is a big download (roughly 400–600 MB, so use Wi-Fi). Needs a phone with a modern GPU; otherwise Base is used.</div></div>
+    <div class="toggle"><div><b>Lyric-aware listening (experimental)</b><div class="note">Once a song is up, also checks the audio against the song’s next lines to keep the highlight in place over noise. A little slower per phrase. Record a log to help tune it.</div></div>
+      <button data-act="lyricAware" aria-pressed="${settings.lyricAware}" aria-label="Lyric-aware listening"></button></div>` : ''}
     <div class="toggle"><div><b>Worship songs only</b><div class="note">Only suggests worship songs, in both Lyrics and Title mode.</div></div>
       <button data-act="worship" aria-pressed="${engine.worship}" aria-label="Worship songs only"></button></div>
     <div class="toggle"><div><b>Record session log</b><div class="note">${logNote()}</div></div>
@@ -220,6 +230,9 @@ app.addEventListener('click', (e) => {
     case 'accent': settings.accent = v; store.set('accent', v); applyLook(); break;
     case 'engine': if (v === 'whisper' && !whisperSupported()) break; settings.engine = v; store.set('engine', v); engine.restartSpeech(); break;
     case 'useBrowser': settings.engine = 'browser'; store.set('engine', 'browser'); keepAwake(); engine.retry(); break;
+    case 'music': settings.music = !settings.music; store.set('music', settings.music ? '1' : '0'); engine.restartSpeech(); break;
+    case 'model': settings.model = v; store.set('model', v); engine.restartSpeech(); break;
+    case 'lyricAware': settings.lyricAware = !settings.lyricAware; store.set('lyricAware', settings.lyricAware ? '1' : '0'); engine.restartSpeech(); break;
     case 'size': settings.size = v; store.set('size', v); applyLook(); break;
     case 'record': if (engine.recording) engine.stopRecording(); else engine.startRecording(); break;
     case 'saveLog': saveLog(); return;

@@ -1,5 +1,6 @@
 // The app's brain: hearing -> identifying -> following. No DOM, so it can be tested.
 import { tokens, distinctive, mostlyLatin } from './matcher.js';
+import { buildCandidates, decide } from './lyric-score.js';
 import { LyricTracker, similar } from './tracker.js';
 import { isWorship } from './worship.js';
 
@@ -97,7 +98,13 @@ export class Engine {
   }
 
   // ---- session log (for debugging with real phones) ----
-  startRecording() { this.log = []; this.logStart = this.now(); this.recording = true; this.note('start', { mode: this.mode, worship: this.worship }); }
+  startRecording() {
+    this.log = [];
+    this.logStart = this.now();
+    this.recording = true;
+    const on = (k) => this.store.get(k) === '1';
+    this.note('start', { mode: this.mode, worship: this.worship, music: on('music'), lyricAware: on('lyricAware'), model: this.store.get('model') || 'base', mic: this.micInfo || null });
+  }
   stopRecording() { this.recording = false; }
   note(k, data = {}) { if (this.recording) this.log.push({ t: this.now() - this.logStart, k, ...data }); }
   /** Everything needed to replay the session: the results as heard, the song and where the highlight went. */
@@ -122,10 +129,38 @@ export class Engine {
       onProgress: (p) => this.set({ modelProgress: p }),
       onReady: () => this.set({ modelProgress: null }),
       onDecode: (d) => this.note('decode', d),
+      onMic: (m) => { this.micInfo = m || null; this.note('mic', m || {}); },
+      getCandidates: () => this.scoreCandidates(),
+      onScore: (r) => this.onScore(r),
       onInfo: (info) => { this.state = { ...this.state, info }; }, // shown in Settings; no redraw needed
     });
     this.speech.start();
   }
+  // ---- lyric-aware listening: score the audio against the song's next lines ----
+  /** Texts the model should score against the audio just heard, or null when not following a song. */
+  scoreCandidates() {
+    const t = this.tracker;
+    const lines = this.state.lyrics?.lines;
+    if (this.state.phase !== 'singing' || !t || !lines) return null;
+    this.scoreCands = buildCandidates(lines, t.line);
+    return this.scoreCands.map(({ id, text }) => ({ id, text }));
+  }
+
+  onScore(r) {
+    const t = this.tracker;
+    if (!t || this.state.phase !== 'singing' || !this.scoreCands) return;
+    const d = decide(r.scores || [], this.scoreCands, t.line);
+    let applied = false;
+    if (d.action === 'move') {
+      const forward = d.to > t.line && d.to - t.line <= 4;
+      const backward = d.to < t.line && t.lost >= 3 && t.line - d.to <= 1; // only when word-by-word following is stuck
+      if (forward || backward) applied = t.placeAtEndOfLine(d.to);
+    }
+    const top = [...(r.scores || [])].sort((a, b) => b.avg - a.avg).slice(0, 3).map((x) => `${x.id}:${x.avg}`);
+    this.note('score', { ...d, applied, top, ms: r.ms, secs: r.secs, err: r.error });
+    if (t.line !== this.state.line) { this.note('line', { line: t.line, pos: t.pos }); this.set({ line: t.line }); }
+  }
+
   /** Switch speech engine (Whisper / browser) while running: stop the old one and start the new. */
   restartSpeech() {
     if (!this.speech) return;
@@ -432,9 +467,13 @@ export class Engine {
       if (r.cooling) { this.setListeningStatus('Busy for a moment. Say the title again.'); return; }
       // Worship mode keeps worship songs, and also the song you actually named.
       const said = [...new Set([...raw, ...fixed])];
+      const isWorshipSong = (song) => !!song.worship || isWorship(song.artist, song.lines);
       const ok = (song) => mostlyLatin(song.lines) &&
-        (!worship || song.worship || isWorship(song.artist, song.lines) || titleMatches(song.title, said));
-      for (const song of r.songs) {
+        (!worship || isWorshipSong(song) || titleMatches(song.title, said));
+      // With the worship filter on, a worship song with the title you said comes before a non-worship song
+      // that shares it ("Cornerstone" by Hillsong before "Cornerstone" by Arctic Monkeys). Otherwise order stays.
+      const worshipFirst = (list) => (worship ? [...list].sort((a, b) => Number(isWorshipSong(b)) - Number(isWorshipSong(a))) : list);
+      for (const song of worshipFirst(r.songs)) {
         if (!ok(song)) continue;
         const t = LyricTracker.start(song.lines.map(tokens));
         if (!t) continue;
@@ -443,7 +482,7 @@ export class Engine {
       }
       const c = await this.api.close({ q: raw.join(' '), alt, exclude: [...this.rejected] });
       if (epoch !== this.epoch) return;
-      const options = c.songs.filter((x) => !this.rejected.has(x.key) && ok(x)).slice(0, 4);
+      const options = worshipFirst(c.songs.filter((x) => !this.rejected.has(x.key) && ok(x))).slice(0, 4);
       // The top close match is exactly the title you said: open it, as with any first match.
       const first = options[0];
       if (first && titleMatches(first.title, said)) {
